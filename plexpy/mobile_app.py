@@ -109,6 +109,9 @@ def add_mobile_device(device_id=None, device_name=None, device_token=None,
     else:
         logger.info("Tautulli MobileApp :: Re-registered mobile device '%s' in the database." % device_name)
 
+    # A (re-)registered device must get a fresh last_seen even if the
+    # same token wrote one within the throttle window
+    _LAST_SEEN.pop(device_token, None)
     set_last_seen(device_token=device_token)
     threading.Thread(target=set_official, args=[device_id, onesignal_id]).start()
     return True
