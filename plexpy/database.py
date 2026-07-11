@@ -47,8 +47,10 @@ def get_connection(filename):
     SQLite connections cannot be shared across threads, and opening a new
     connection per operation discards the page cache and re-runs the
     setup PRAGMAs for every statement. Each thread keeps one long-lived
-    connection per database file instead; it is closed automatically when
-    the thread exits.
+    connection per database file instead; it is closed when the thread
+    exits. Pooled threads (CherryPy workers, schedulers) live for the
+    process lifetime, so do not route one-off temporary database files
+    through here — use sqlite3.connect directly and close it.
     """
     connections = getattr(_thread_connections, 'connections', None)
     if connections is None:
@@ -492,6 +494,11 @@ class MonitorDatabase(object):
 
         with db_lock:
             connection.execute("BEGIN IMMEDIATE")
+            # Save and restore any enclosing transaction's connection (a
+            # nested transaction on a different database file must not
+            # clear the outer marker, or the outer block's remaining
+            # writes would silently auto-commit per statement)
+            previous_tx_connection = getattr(_thread_connections, 'tx_connection', None)
             _thread_connections.tx_connection = connection
             try:
                 yield self
@@ -501,7 +508,7 @@ class MonitorDatabase(object):
             else:
                 connection.commit()
             finally:
-                _thread_connections.tx_connection = None
+                _thread_connections.tx_connection = previous_tx_connection
 
     def action(self, query, args=None, return_last_id=False):
         if query is None:
@@ -531,10 +538,15 @@ class MonitorDatabase(object):
                 break
 
             except sqlite3.OperationalError as e:
-                e = str(e)
-                if "unable to open database file" in e or "database is locked" in e:
+                if "unable to open database file" in str(e) or "database is locked" in str(e):
                     logger.warn("Tautulli Database :: Database Error: %s", e)
                     attempts += 1
+                    if attempts >= 5:
+                        # Do not return None after exhausting the retries:
+                        # a silent failure inside a transaction() block
+                        # would let the block commit an incomplete write,
+                        # and select() would crash fetching from None
+                        raise
                     time.sleep(1)
                 else:
                     logger.error("Tautulli Database :: Database error: %s", e)
