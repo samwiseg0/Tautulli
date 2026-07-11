@@ -267,11 +267,26 @@ class Users(object):
 
         custom_where = ['users.user_id', user_id]
 
+        # Aggregate the narrow session_history table per IP first, then
+        # join the wide tables only for each IP's most recent history row
+        # (the old form joined every history row of the user to the wide
+        # tables and picked the displayed row arbitrarily)
+        history_agg = (
+            "(SELECT ip_address AS agg_ip_address, "
+            "MIN(started) AS first_seen, "
+            "MAX(started) AS last_seen, "
+            "COUNT(id) AS play_count, "
+            "MAX(id) AS history_row_id "
+            "FROM session_history "
+            "WHERE user_id = %d "
+            "GROUP BY ip_address) AS history_agg" % helpers.cast_to_int(user_id)
+        )
+
         columns = ["session_history.id AS history_row_id",
-                   "MIN(session_history.started) AS first_seen",
-                   "MAX(session_history.started) AS last_seen",
+                   "history_agg.first_seen",
+                   "history_agg.last_seen",
                    "session_history.ip_address",
-                   "COUNT(session_history.id) AS play_count",
+                   "history_agg.play_count",
                    "session_history.platform",
                    "session_history.player",
                    "session_history.rating_key",
@@ -299,14 +314,17 @@ class Users(object):
             query = data_tables.ssp_query(table_name='session_history',
                                           columns=columns,
                                           custom_where=[custom_where],
-                                          group_by=['ip_address'],
+                                          group_by=[],
                                           join_types=['JOIN',
                                                       'JOIN',
+                                                      'JOIN',
                                                       'JOIN'],
-                                          join_tables=['users',
+                                          join_tables=[history_agg,
+                                                       'users',
                                                        'session_history_metadata',
                                                        'session_history_media_info'],
-                                          join_evals=[['session_history.user_id', 'users.user_id'],
+                                          join_evals=[['session_history.id', 'history_agg.history_row_id'],
+                                                      ['session_history.user_id', 'users.user_id'],
                                                       ['session_history.id', 'session_history_metadata.id'],
                                                       ['session_history.id', 'session_history_media_info.id']],
                                           kwargs=kwargs)
