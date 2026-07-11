@@ -81,6 +81,8 @@ def refresh_libraries():
                 "section_id NOT IN ({})".format(", ".join(["?"] * len(section_ids)))
         monitor_db.action(query=query, args=[plexpy.CONFIG.PMS_IDENTIFIER] + section_ids)
 
+        _LIBRARY_TYPES_CACHE['types'] = None
+
         new_keys = plexpy.CONFIG.HOME_LIBRARY_CARDS + new_keys
         plexpy.CONFIG.__setattr__('HOME_LIBRARY_CARDS', new_keys)
         plexpy.CONFIG.write()
@@ -118,12 +120,21 @@ def add_live_tv_library(refresh=False):
     result = monitor_db.upsert('library_sections', key_dict=section_keys, value_dict=section_values)
 
 
+# Library section types change only when libraries are added or removed;
+# every graph endpoint checks up to 4 types, so cache them briefly
+_LIBRARY_TYPES_CACHE = {'types': None, 'expiry': 0}
+_LIBRARY_TYPES_CACHE_TTL = 60  # seconds
+
+
 def has_library_type(section_type):
-    monitor_db = database.MonitorDatabase()
-    query = "SELECT * FROM library_sections WHERE section_type = ? AND deleted_section = 0"
-    args = [section_type]
-    result = monitor_db.select_single(query=query, args=args)
-    return bool(result)
+    now = helpers.timestamp()
+    if _LIBRARY_TYPES_CACHE['types'] is None or now >= _LIBRARY_TYPES_CACHE['expiry']:
+        monitor_db = database.MonitorDatabase()
+        query = "SELECT DISTINCT section_type FROM library_sections WHERE deleted_section = 0"
+        result = monitor_db.select(query=query)
+        _LIBRARY_TYPES_CACHE['types'] = {row['section_type'] for row in result}
+        _LIBRARY_TYPES_CACHE['expiry'] = now + _LIBRARY_TYPES_CACHE_TTL
+    return section_type in _LIBRARY_TYPES_CACHE['types']
 
 
 def get_collections(section_id=None):
