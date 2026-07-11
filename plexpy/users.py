@@ -496,7 +496,7 @@ class Users(object):
             grouping = plexpy.CONFIG.GROUP_HISTORY_TABLES
 
         if query_days and query_days is not None:
-            query_days = map(helpers.cast_to_int, str(query_days).split(','))
+            query_days = list(map(helpers.cast_to_int, str(query_days).split(',')))
         else:
             query_days = [1, 7, 30, 0]
 
@@ -508,46 +508,39 @@ class Users(object):
 
         group_by = 'reference_id' if grouping else 'id'
 
-        for days in query_days:
-            timestamp_query = timestamp - days * 24 * 60 * 60
+        if str(user_id).isdigit():
+            # Compute every requested window with conditional aggregation
+            # in a single pass over the user's history instead of one
+            # full aggregate query per window
+            select_parts = []
+            for i, days in enumerate(query_days):
+                if days > 0:
+                    timestamp_query = timestamp - days * 24 * 60 * 60
+                    select_parts.append(
+                        "SUM(CASE WHEN stopped >= %(ts)d THEN (stopped - started) - "
+                        "(CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) "
+                        "AS total_time_%(i)d, "
+                        "COUNT(DISTINCT CASE WHEN stopped >= %(ts)d THEN %(group_by)s END) "
+                        "AS total_plays_%(i)d" % {'ts': timestamp_query, 'i': i, 'group_by': group_by})
+                else:
+                    select_parts.append(
+                        "(SUM(stopped - started) - "
+                        "SUM(CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END)) "
+                        "AS total_time_%(i)d, "
+                        "COUNT(DISTINCT %(group_by)s) AS total_plays_%(i)d" % {'i': i, 'group_by': group_by})
 
             try:
-                if days > 0:
-                    if str(user_id).isdigit():
-                        query = "SELECT (SUM(stopped - started) - " \
-                                "   SUM(CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END)) AS total_time, " \
-                                "COUNT(DISTINCT %s) AS total_plays " \
-                                "FROM session_history " \
-                                "WHERE stopped >= %s " \
-                                "AND user_id = ? " % (group_by, timestamp_query)
-                        result = monitor_db.select(query, args=[user_id])
-                    else:
-                        result = []
-                else:
-                    if str(user_id).isdigit():
-                        query = "SELECT (SUM(stopped - started) - " \
-                                "   SUM(CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END)) AS total_time, " \
-                                "COUNT(DISTINCT %s) AS total_plays " \
-                                "FROM session_history " \
-                                "WHERE user_id = ? " % group_by
-                        result = monitor_db.select(query, args=[user_id])
-                    else:
-                        result = []
+                query = "SELECT " + ", ".join(select_parts) + \
+                        " FROM session_history WHERE user_id = ?"
+                result = monitor_db.select_single(query, args=[user_id])
             except Exception as e:
                 logger.warn("Tautulli Users :: Unable to execute database query for get_watch_time_stats: %s." % e)
-                result = []
+                return []
 
-            for item in result:
-                if item['total_time']:
-                    total_time = item['total_time']
-                    total_plays = item['total_plays']
-                else:
-                    total_time = 0
-                    total_plays = 0
-
+            for i, days in enumerate(query_days):
                 row = {'query_days': days,
-                       'total_time': total_time,
-                       'total_plays': total_plays
+                       'total_time': result.get('total_time_%d' % i) or 0,
+                       'total_plays': result.get('total_plays_%d' % i) or 0
                        }
 
                 user_watch_time_stats.append(row)
