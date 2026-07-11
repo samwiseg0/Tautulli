@@ -33,9 +33,13 @@ ACTIVITY_SCHED = None
 
 RECENTLY_ADDED_QUEUE = {}
 
-# Markers for active sessions: {session_key: (rating_key, markers)}
-# Evicted by delete_metadata_cache() when a session stops
+# Markers for active sessions: {session_key: (rating_key, markers, cached_at)}
+# Evicted by delete_metadata_cache() when a session stops. Entries are
+# re-read after a short TTL so markers that appear mid-session (Plex
+# still analyzing a just-added item) are picked up like they were when
+# the metadata cache file was re-read every tick.
 _MARKERS_CACHE = {}
+_MARKERS_CACHE_TTL = 60  # seconds
 
 
 class ActivityHandler(object):
@@ -379,14 +383,15 @@ class ActivityHandler(object):
         # markers at module level instead of re-reading and re-parsing the
         # metadata cache file from disk on every event
         cached = _MARKERS_CACHE.get(self.session_key)
-        if cached is not None and cached[0] == self.rating_key:
+        if cached is not None and cached[0] == self.rating_key \
+                and helpers.timestamp() - cached[2] < _MARKERS_CACHE_TTL:
             markers = cached[1]
         else:
             self.get_metadata()
             if not self.metadata:
                 return
             markers = self.metadata.get('markers') or []
-            _MARKERS_CACHE[self.session_key] = (self.rating_key, markers)
+            _MARKERS_CACHE[self.session_key] = (self.rating_key, markers, helpers.timestamp())
 
         marker_flag = False
 
