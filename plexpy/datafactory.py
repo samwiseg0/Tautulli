@@ -411,7 +411,7 @@ class DataFactory(object):
                             "sh.section_id, shm.art, sh.media_type, shm.content_rating, shm.rating, " \
                             "shm.labels, sh.started, shm.live, shm.guid, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, media_type, rating_key, section_id, started, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -465,7 +465,7 @@ class DataFactory(object):
                             "shm.labels, sh.started, shm.live, shm.guid, " \
                             "COUNT(DISTINCT sh.user_id) AS users_watched, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) as total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, media_type, rating_key, section_id, started, user_id, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -517,7 +517,7 @@ class DataFactory(object):
                             "shm.year, sh.rating_key, shm.art, sh.media_type, " \
                             "shm.content_rating, shm.rating, shm.labels, sh.started, shm.live, shm.guid, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, grandparent_rating_key, media_type, rating_key, section_id, started, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -572,7 +572,7 @@ class DataFactory(object):
                             "shm.content_rating, shm.rating, shm.labels, sh.started, shm.live, shm.guid, " \
                             "COUNT(DISTINCT sh.user_id) AS users_watched, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) as total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, grandparent_rating_key, media_type, rating_key, section_id, started, user_id, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -624,7 +624,7 @@ class DataFactory(object):
                             "shm.art, sh.media_type, shm.content_rating, shm.rating, shm.labels, " \
                             "sh.started, shm.live, shm.guid, MAX(sh.started) AS last_watch, " \
                             "COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, grandparent_rating_key, media_type, section_id, started, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -678,7 +678,7 @@ class DataFactory(object):
                             "shm.art, sh.media_type, shm.content_rating, shm.rating, shm.labels, " \
                             "sh.started, shm.live, shm.guid, COUNT(DISTINCT sh.user_id) AS users_watched, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) as total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, grandparent_rating_key, media_type, section_id, started, user_id, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -735,7 +735,7 @@ class DataFactory(object):
                             "ls.art AS library_art, ls.custom_art_url AS custom_art, " \
                             "sh.started, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, media_type, player, rating_key, section_id, started, user, user_id, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -824,7 +824,7 @@ class DataFactory(object):
                             "   THEN u.username ELSE u.friendly_name END) " \
                             "   AS friendly_name, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, media_type, player, rating_key, section_id, started, user, user_id, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -893,7 +893,7 @@ class DataFactory(object):
                 try:
                     query = "SELECT sh.platform, sh.started, " \
                             "MAX(sh.started) AS last_watch, COUNT(sh.id) AS total_plays, SUM(sh.d) AS total_duration " \
-                            "FROM (SELECT *, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
+                            "FROM (SELECT id, platform, started, SUM(CASE WHEN stopped > 0 THEN (stopped - started) - " \
                             "       (CASE WHEN paused_counter IS NULL THEN 0 ELSE paused_counter END) ELSE 0 END) " \
                             "       AS d " \
                             "   FROM session_history " \
@@ -987,7 +987,9 @@ class DataFactory(object):
                             "MAX(sh.started) AS last_watch, sh._view_offset, sh._duration, " \
                             "(sh._view_offset / sh._duration * 100) AS percent_complete, " \
                             "%s " \
-                            "FROM (SELECT *, MAX(session_history.id), " \
+                            "FROM (SELECT session_history.id, session_history.rating_key, session_history.user, " \
+                            "   session_history.user_id, session_history.player, session_history.section_id, " \
+                            "   session_history.media_type, session_history.started, MAX(session_history.id), " \
                             "   (CASE WHEN view_offset IS NULL THEN 0.1 ELSE view_offset * 1.0 END) AS _view_offset, " \
                             "   (CASE WHEN duration IS NULL THEN 1.0 ELSE duration * 1.0 END) AS _duration " \
                             "   FROM session_history " \
