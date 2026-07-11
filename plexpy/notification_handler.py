@@ -568,6 +568,14 @@ def build_media_notify_params(notify_action=None, session=None, timeline=None, m
         if children:
             child_metadata = [child for child in children['children_list']
                               if str(child['rating_key']) in child_keys]
+        if not child_metadata:
+            # The children listing failed or did not include the queued
+            # keys; fall back to fetching each child so the grouped
+            # season/episode ranges are not silently empty
+            for key in child_keys:
+                child = pmsconnect.PmsConnect().get_metadata_details(rating_key=key)
+                if child:
+                    child_metadata.append(child)
 
     # Session values
     session = session or {}
