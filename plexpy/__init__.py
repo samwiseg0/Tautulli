@@ -2831,6 +2831,14 @@ def dbcheck():
 
     logger.info("Database indices created.")
 
+    # Refresh the query planner statistics (bounded by analysis_limit).
+    # This cannot be left to the scheduled "PRAGMA optimize": before
+    # SQLite 3.46 that pragma only considers tables already queried on
+    # the same connection, so on a fresh connection it is a no-op and
+    # sqlite_stat1 may otherwise never be populated.
+    c_db.execute("PRAGMA analysis_limit=400")
+    c_db.execute("ANALYZE")
+
     # Set database version
     result = c_db.execute("SELECT value FROM version_info WHERE key = 'version'").fetchone()
     if not result:
