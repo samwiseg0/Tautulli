@@ -41,7 +41,7 @@ def add_newsletter_each(newsletter_id=None, notify_action=None, **kwargs):
             'newsletter_id': newsletter_id,
             'notify_action': notify_action}
     data.update(kwargs)
-    plexpy.NOTIFY_QUEUE.put(data)
+    plexpy.NEWSLETTER_QUEUE.put(data)
 
 
 def schedule_newsletters(newsletter_id=None):

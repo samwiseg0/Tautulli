@@ -68,12 +68,36 @@ def process_queue():
     logger.info("Tautulli NotificationHandler :: Notification thread exiting...")
 
 
+def process_newsletter_queue():
+    queue = plexpy.NEWSLETTER_QUEUE
+    while True:
+        params = queue.get()
+
+        if params is None:
+            break
+        elif params:
+            try:
+                notify_newsletter(**params)
+            except Exception as e:
+                logger.exception("Tautulli NotificationHandler :: Newsletter thread exception: %s" % e)
+
+        queue.task_done()
+
+    logger.info("Tautulli NotificationHandler :: Newsletter thread exiting...")
+
+
 def start_threads(num_threads=1):
     logger.info("Tautulli NotificationHandler :: Starting background notification handler ({} threads).".format(num_threads))
     for x in range(num_threads):
         thread = threading.Thread(target=process_queue)
         thread.daemon = True
         thread.start()
+
+    # Newsletters build on their own worker so a long newsletter render
+    # cannot stall playback notifications behind it
+    thread = threading.Thread(target=process_newsletter_queue)
+    thread.daemon = True
+    thread.start()
 
 
 def add_notifier_each(notifier_id=None, notify_action=None, stream_data=None, timeline_data=None, manual_trigger=False, **kwargs):
