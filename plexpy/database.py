@@ -38,6 +38,18 @@ db_lock = threading.RLock()
 # connection of the explicit transaction currently open on the thread
 _thread_connections = threading.local()
 
+# Lock-free reads are only safe with WAL's snapshot isolation; other
+# journal modes serialize readers behind the write lock like before.
+# Resolved once (changing the journal mode requires a restart anyway).
+_reads_lock_free = None
+
+
+def _use_lock_free_reads():
+    global _reads_lock_free
+    if _reads_lock_free is None:
+        _reads_lock_free = str(plexpy.CONFIG.JOURNAL_MODE).upper() == 'WAL'
+    return _reads_lock_free
+
 IS_IMPORTING = False
 
 
@@ -530,7 +542,7 @@ class MonitorDatabase(object):
 
         connection = self.connection
         # Writes are serialized by db_lock; reads run concurrently (WAL)
-        is_read = query.lstrip()[:7].upper().startswith(('SELECT', 'EXPLAIN'))
+        is_read = query.lstrip()[:7].upper().startswith(('SELECT', 'EXPLAIN')) and _use_lock_free_reads()
         in_transaction = getattr(_thread_connections, 'tx_connection', None) is connection
 
         sql_result = None
