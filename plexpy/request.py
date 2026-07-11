@@ -16,6 +16,7 @@
 #  along with Tautulli.  If not, see <http://www.gnu.org/licenses/>.
 
 import collections
+from http.cookiejar import DefaultCookiePolicy
 from xml.dom import minidom
 
 from bs4 import BeautifulSoup
@@ -32,8 +33,12 @@ last_requests = collections.defaultdict(int)
 fake_lock = lock.FakeLock()
 
 # Shared session so repeated requests to the same host reuse the TCP/TLS
-# connection instead of paying a fresh handshake per call
+# connection instead of paying a fresh handshake per call. Cookie storage
+# is disabled: the session is shared by unrelated notifier/newsletter/
+# versioncheck calls (previously each used a fresh request), and the
+# cookie jar is not safe for concurrent mutation anyway.
 _session = requests.Session()
+_session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
 
 # Default (connect, read) timeout so a hung remote endpoint cannot block
 # a worker thread forever; callers may override via kwargs
