@@ -121,6 +121,8 @@ def add_live_tv_library(refresh=False):
 
     result = monitor_db.upsert('library_sections', key_dict=section_keys, value_dict=section_values)
 
+    _LIBRARY_TYPES_CACHE['types'] = None
+
 
 # Library section types change only when libraries are added or removed;
 # every graph endpoint checks up to 4 types, so cache them briefly
@@ -130,13 +132,17 @@ _LIBRARY_TYPES_CACHE_TTL = 60  # seconds
 
 def has_library_type(section_type):
     now = helpers.timestamp()
-    if _LIBRARY_TYPES_CACHE['types'] is None or now >= _LIBRARY_TYPES_CACHE['expiry']:
+    # Work on a local reference: another thread may invalidate the cache
+    # (set 'types' to None) between the check and the membership test
+    types = _LIBRARY_TYPES_CACHE['types']
+    if types is None or now >= _LIBRARY_TYPES_CACHE['expiry']:
         monitor_db = database.MonitorDatabase()
         query = "SELECT DISTINCT section_type FROM library_sections WHERE deleted_section = 0"
         result = monitor_db.select(query=query)
-        _LIBRARY_TYPES_CACHE['types'] = {row['section_type'] for row in result}
+        types = {row['section_type'] for row in result}
+        _LIBRARY_TYPES_CACHE['types'] = types
         _LIBRARY_TYPES_CACHE['expiry'] = now + _LIBRARY_TYPES_CACHE_TTL
-    return section_type in _LIBRARY_TYPES_CACHE['types']
+    return section_type in types
 
 
 def get_collections(section_id=None):
@@ -1116,6 +1122,7 @@ class Libraries(object):
                     monitor_db.action("UPDATE library_sections "
                                       "SET deleted_section = 1, keep_history = 0 "
                                       "WHERE server_id = ? AND section_id = ?", [server_id, section_id])
+                    _LIBRARY_TYPES_CACHE['types'] = None
                     return delete_success
                 except Exception as e:
                     logger.warn("Tautulli Libraries :: Unable to execute database query for delete: %s." % e)
@@ -1136,6 +1143,7 @@ class Libraries(object):
                                       "SET deleted_section = 0, keep_history = 1 "
                                       "WHERE section_id = ?",
                                       [section_id])
+                    _LIBRARY_TYPES_CACHE['types'] = None
                     return True
                 else:
                     return False
@@ -1149,6 +1157,7 @@ class Libraries(object):
                                       "SET deleted_section = 0, keep_history = 1 "
                                       "WHERE section_name = ?",
                                       [section_name])
+                    _LIBRARY_TYPES_CACHE['types'] = None
                     return True
                 else:
                     return False
