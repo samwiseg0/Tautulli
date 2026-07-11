@@ -33,6 +33,10 @@ ACTIVITY_SCHED = None
 
 RECENTLY_ADDED_QUEUE = {}
 
+# Markers for active sessions: {session_key: (rating_key, markers)}
+# Evicted by delete_metadata_cache() when a session stops
+_MARKERS_CACHE = {}
+
 
 class ActivityHandler(object):
 
@@ -366,11 +370,22 @@ class ActivityHandler(object):
 
     def check_markers(self):
         # Monitor if the stream has reached the intro or credit marker offsets
-        self.get_metadata()
+        # A new handler is built per websocket message, so memoize the
+        # markers at module level instead of re-reading and re-parsing the
+        # metadata cache file from disk on every event
+        cached = _MARKERS_CACHE.get(self.session_key)
+        if cached is not None and cached[0] == self.rating_key:
+            markers = cached[1]
+        else:
+            self.get_metadata()
+            if not self.metadata:
+                return
+            markers = self.metadata.get('markers') or []
+            _MARKERS_CACHE[self.session_key] = (self.rating_key, markers)
 
         marker_flag = False
 
-        for marker_idx, marker in enumerate(self.metadata['markers'], start=1):
+        for marker_idx, marker in enumerate(markers, start=1):
             # Websocket events only fire every 10 seconds
             # Check if the marker is within 10 seconds of the current viewOffset
             if marker['start_time_offset'] - 10000 <= self.view_offset <= marker['end_time_offset']:
@@ -738,5 +753,6 @@ def on_created(rating_key, **kwargs):
 
 
 def delete_metadata_cache(session_key):
+    _MARKERS_CACHE.pop(session_key, None)
     file = Path(plexpy.CONFIG.CACHE_DIR) / 'session_metadata' / f'metadata-sessionKey-{session_key}.json'
     file.unlink(missing_ok=True)
