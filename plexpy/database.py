@@ -52,6 +52,16 @@ def _use_lock_free_reads():
 
 IS_IMPORTING = False
 
+# Bumped whenever session_history contents change, so expensive history
+# aggregates can be cached until the next write. A lost concurrent bump
+# costs at most one extra recompute.
+history_version = 0
+
+
+def bump_history_version():
+    global history_version
+    history_version += 1
+
 
 def get_connection(filename):
     """Return this thread's persistent connection to the database file.
@@ -254,6 +264,7 @@ def import_tautulli_db(database=None, method=None, backup=False):
 
     vacuum()
 
+    bump_history_version()
     logger.info("Tautulli Database :: Tautulli database import complete.")
     set_is_importing(False)
 
@@ -308,6 +319,9 @@ def delete_rows_from_table(table, row_ids):
     if row_ids:
         logger.info("Tautulli Database :: Deleting row ids %s from %s database table", row_ids, table)
 
+        if table == 'session_history':
+            bump_history_version()
+
         # SQlite versions prior to 3.32.0 (2020-05-22) have maximum variable limit of 999
         # https://sqlite.org/limits.html
         sqlite_max_variable_number = 999
@@ -348,6 +362,7 @@ def _delete_session_history_where(where_column, where_value):
                                   [where_value])
             monitor_db.action("DELETE FROM session_history WHERE {column} = ?".format(column=where_column),
                               [where_value])
+        bump_history_version()
         return True
     except Exception as e:
         logger.error("Tautulli Database :: Failed to delete history for %s %s: %s"
