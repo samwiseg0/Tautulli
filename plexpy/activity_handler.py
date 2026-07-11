@@ -757,6 +757,10 @@ def on_created(rating_key, **kwargs):
         logger.error("Tautulli TimelineHandler :: Unable to retrieve metadata for rating_key %s" % str(rating_key))
 
 
+def clear_markers_cache():
+    _MARKERS_CACHE.clear()
+
+
 def delete_metadata_cache(session_key):
     _MARKERS_CACHE.pop(session_key, None)
     file = Path(plexpy.CONFIG.CACHE_DIR) / 'session_metadata' / f'metadata-sessionKey-{session_key}.json'
