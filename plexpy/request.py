@@ -31,6 +31,14 @@ from plexpy import logger
 last_requests = collections.defaultdict(int)
 fake_lock = lock.FakeLock()
 
+# Shared session so repeated requests to the same host reuse the TCP/TLS
+# connection instead of paying a fresh handshake per call
+_session = requests.Session()
+
+# Default (connect, read) timeout so a hung remote endpoint cannot block
+# a worker thread forever; callers may override via kwargs
+DEFAULT_TIMEOUT = (10, 60)
+
 
 def request_response(url, method="get", auto_raise=True,
                      whitelist_status_code=None, lock=fake_lock, **kwargs):
@@ -56,9 +64,11 @@ def request_response(url, method="get", auto_raise=True,
     if not kwargs['verify']:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Map method to the request.XXX method. This is a simple hack, but it
+    kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
+
+    # Map method to the session.XXX method. This is a simple hack, but it
     # allows requests to apply more magic per method. See lib/requests/api.py.
-    request_method = getattr(requests, method.lower())
+    request_method = getattr(_session, method.lower())
 
     try:
         # Request URL and wait for response
@@ -148,9 +158,11 @@ def request_response2(url, method="get", auto_raise=True,
     if not kwargs['verify']:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Map method to the request.XXX method. This is a simple hack, but it
+    kwargs.setdefault('timeout', DEFAULT_TIMEOUT)
+
+    # Map method to the session.XXX method. This is a simple hack, but it
     # allows requests to apply more magic per method. See lib/requests/api.py.
-    request_method = getattr(requests, method.lower())
+    request_method = getattr(_session, method.lower())
 
     response = None
     err_msg = http_err = req_msg = None
