@@ -18,6 +18,7 @@ import sqlite3
 import threading
 import time
 import zipfile
+from contextlib import contextmanager
 
 import plexpy
 from plexpy import helpers
@@ -25,9 +26,48 @@ from plexpy import logger
 
 
 FILENAME = "tautulli.db"
-db_lock = threading.Lock()
+
+# Serializes database writes within the process. Reads run lock-free:
+# the default WAL journal mode supports concurrent readers alongside a
+# single writer, and other journal modes fall back to SQLite's busy
+# timeout for read/write contention. Re-entrant so that a write to a
+# second database file inside a transaction() block cannot self-deadlock.
+db_lock = threading.RLock()
+
+# Per-thread persistent connections keyed by database filename, plus the
+# connection of the explicit transaction currently open on the thread
+_thread_connections = threading.local()
 
 IS_IMPORTING = False
+
+
+def get_connection(filename):
+    """Return this thread's persistent connection to the database file.
+
+    SQLite connections cannot be shared across threads, and opening a new
+    connection per operation discards the page cache and re-runs the
+    setup PRAGMAs for every statement. Each thread keeps one long-lived
+    connection per database file instead; it is closed automatically when
+    the thread exits.
+    """
+    connections = getattr(_thread_connections, 'connections', None)
+    if connections is None:
+        connections = {}
+        _thread_connections.connections = connections
+
+    connection = connections.get(filename)
+    if connection is None:
+        connection = sqlite3.connect(filename, timeout=20)
+        # Set database synchronous mode (default NORMAL)
+        connection.execute("PRAGMA synchronous = %s" % plexpy.CONFIG.SYNCHRONOUS_MODE)
+        # Set database journal mode (default WAL)
+        connection.execute("PRAGMA journal_mode = %s" % plexpy.CONFIG.JOURNAL_MODE)
+        # Set database cache size (default 32MB)
+        connection.execute("PRAGMA cache_size = -%s" % (get_cache_size() * 1024))
+        connection.row_factory = dict_factory
+        connections[filename] = connection
+
+    return connection
 
 
 def set_is_importing(value):
@@ -420,48 +460,87 @@ class MonitorDatabase(object):
 
     def __init__(self, filename=None):
         self.filename = db_filename(filename)
-        self.connection = sqlite3.connect(self.filename, timeout=20)
-        # Set database synchronous mode (default NORMAL)
-        self.connection.execute("PRAGMA synchronous = %s" % plexpy.CONFIG.SYNCHRONOUS_MODE)
-        # Set database journal mode (default WAL)
-        self.connection.execute("PRAGMA journal_mode = %s" % plexpy.CONFIG.JOURNAL_MODE)
-        # Set database cache size (default 32MB)
-        self.connection.execute("PRAGMA cache_size = -%s" % (get_cache_size() * 1024))
-        self.connection.row_factory = dict_factory
+
+    @property
+    def connection(self):
+        return get_connection(self.filename)
+
+    @contextmanager
+    def transaction(self):
+        """Group multiple statements into a single transaction.
+
+        All action() calls made on this thread for the same database file
+        inside the block run in one transaction, which is committed on
+        exit or rolled back on error. The write lock is held for the
+        whole block.
+        """
+        connection = self.connection
+        if getattr(_thread_connections, 'tx_connection', None) is connection:
+            # Already inside a transaction on this thread
+            yield self
+            return
+
+        with db_lock:
+            connection.execute("BEGIN IMMEDIATE")
+            _thread_connections.tx_connection = connection
+            try:
+                yield self
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+            finally:
+                _thread_connections.tx_connection = None
 
     def action(self, query, args=None, return_last_id=False):
         if query is None:
             return
 
-        with db_lock:
-            sql_result = None
-            attempts = 0
+        connection = self.connection
+        # Writes are serialized by db_lock; reads run concurrently (WAL)
+        is_read = query.lstrip()[:7].upper().startswith(('SELECT', 'EXPLAIN'))
+        in_transaction = getattr(_thread_connections, 'tx_connection', None) is connection
 
-            while attempts < 5:
-                try:
-                    with self.connection as c:
-                        if args is None:
-                            sql_result = c.execute(query)
-                        else:
-                            sql_result = c.execute(query, args)
-                    # Our transaction was successful, leave the loop
-                    break
+        sql_result = None
+        attempts = 0
 
-                except sqlite3.OperationalError as e:
-                    e = str(e)
-                    if "unable to open database file" in e or "database is locked" in e:
-                        logger.warn("Tautulli Database :: Database Error: %s", e)
-                        attempts += 1
-                        time.sleep(1)
-                    else:
-                        logger.error("Tautulli Database :: Database error: %s", e)
-                        raise
+        while attempts < 5:
+            try:
+                if in_transaction:
+                    # This thread already holds db_lock via transaction();
+                    # do not commit until the transaction block exits
+                    sql_result = self._execute(connection, query, args)
+                elif is_read:
+                    sql_result = self._execute(connection, query, args)
+                else:
+                    with db_lock:
+                        with connection as c:
+                            sql_result = self._execute(c, query, args)
+                # Our transaction was successful, leave the loop
+                break
 
-                except sqlite3.DatabaseError as e:
-                    logger.error("Tautulli Database :: Fatal Error executing %s :: %s", query, e)
+            except sqlite3.OperationalError as e:
+                e = str(e)
+                if "unable to open database file" in e or "database is locked" in e:
+                    logger.warn("Tautulli Database :: Database Error: %s", e)
+                    attempts += 1
+                    time.sleep(1)
+                else:
+                    logger.error("Tautulli Database :: Database error: %s", e)
                     raise
 
-            return sql_result
+            except sqlite3.DatabaseError as e:
+                logger.error("Tautulli Database :: Fatal Error executing %s :: %s", query, e)
+                raise
+
+        return sql_result
+
+    @staticmethod
+    def _execute(connection, query, args):
+        if args is None:
+            return connection.execute(query)
+        return connection.execute(query, args)
 
     def select(self, query, args=None):
 
@@ -512,7 +591,3 @@ class MonitorDatabase(object):
         result = self.select_single(query="SELECT last_insert_rowid() AS last_id")
         if result:
             return result.get('last_id', None)
-        
-    def __del__(self):
-        # Close the database connection when object is garbage collected
-        self.connection.close()
