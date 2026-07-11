@@ -941,9 +941,18 @@ class Libraries(object):
                 return []
 
             for i, days in enumerate(query_days):
+                total_time = result.get('total_time_%d' % i)
+                # Match the old per-window behavior exactly: a window
+                # with no (or zero) watch time reports zero plays too
+                if total_time:
+                    total_plays = result.get('total_plays_%d' % i) or 0
+                else:
+                    total_time = 0
+                    total_plays = 0
+
                 row = {'query_days': days,
-                       'total_time': result.get('total_time_%d' % i) or 0,
-                       'total_plays': result.get('total_plays_%d' % i) or 0
+                       'total_time': total_time,
+                       'total_plays': total_plays
                        }
 
                 library_watch_time_stats.append(row)
