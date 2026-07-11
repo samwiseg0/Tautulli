@@ -523,6 +523,10 @@ def create_https_certificates(ssl_cert, ssl_key):
 
 
 def cast_to_int(s):
+    # get_xml_attr returns '' for missing attributes, making the empty
+    # string the most common failure; skip the exception machinery for it
+    if not s:
+        return 0
     try:
         return int(s)
     except (ValueError, TypeError):
@@ -530,6 +534,8 @@ def cast_to_int(s):
 
 
 def cast_to_float(s):
+    if not s:
+        return 0
     try:
         return float(s)
     except (ValueError, TypeError):
