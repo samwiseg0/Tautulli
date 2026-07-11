@@ -1152,6 +1152,9 @@ class DataFactory(object):
 
             history_by_section = {}
             if last_ids:
+                # LEFT JOIN like the old combined query: an orphaned
+                # history row without metadata still contributes its
+                # session_history fields to the library card
                 history_rows = monitor_db.select(
                     "SELECT sh.section_id, sh.id, shm.title, shm.grandparent_title, shm.full_title, shm.year, "
                     "shm.media_index, shm.parent_media_index, "
@@ -1160,7 +1163,7 @@ class DataFactory(object):
                     "shm.art, sh.media_type, shm.content_rating, shm.labels, shm.live, shm.guid, "
                     "sh.started AS last_watch "
                     "FROM session_history AS sh "
-                    "JOIN session_history_metadata AS shm ON sh.id = shm.id "
+                    "LEFT OUTER JOIN session_history_metadata AS shm ON sh.id = shm.id "
                     "WHERE sh.id IN (%s)" % ",".join(["?"] * len(last_ids)),
                     args=last_ids)
                 history_by_section = {row['section_id']: row for row in history_rows}
