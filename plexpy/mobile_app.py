@@ -28,6 +28,9 @@ _ONESIGNAL_DISABLED = 'onesignal-disabled'
 
 TEMP_DEVICE_TOKENS = {}
 
+_LAST_SEEN = {}
+_LAST_SEEN_THROTTLE = 60  # seconds between last_seen writes per device
+
 
 def set_temp_device_token(token=None, remove=False, add=False, success=False):
     global TEMP_DEVICE_TOKENS
@@ -180,8 +183,16 @@ def set_official(device_id, onesignal_id):
 
 
 def set_last_seen(device_token=None):
-    db = database.MonitorDatabase()
     last_seen = helpers.timestamp()
+
+    # Every authenticated mobile app API call updates last_seen; throttle
+    # the write so read-only polling doesn't contend with activity
+    # processing on every request
+    if last_seen - _LAST_SEEN.get(device_token, 0) < _LAST_SEEN_THROTTLE:
+        return
+    _LAST_SEEN[device_token] = last_seen
+
+    db = database.MonitorDatabase()
 
     try:
         result = db.action("UPDATE mobile_devices SET last_seen = ? WHERE device_token = ?",
