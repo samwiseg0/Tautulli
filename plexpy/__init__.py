@@ -83,6 +83,7 @@ SCHED = None
 SCHED_LOCK = threading.Lock()
 
 NOTIFY_QUEUE = queue.Queue()
+NEWSLETTER_QUEUE = queue.Queue()
 
 INIT_LOCK = threading.Lock()
 _INITIALIZED = False
@@ -2946,6 +2947,7 @@ def shutdown(restart=False, update=False, checkout=False, reset=False):
     # Stop the notification threads
     for i in range(CONFIG.NOTIFICATION_THREADS):
         NOTIFY_QUEUE.put(None)
+    NEWSLETTER_QUEUE.put(None)
 
     CONFIG.write()
 
