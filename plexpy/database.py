@@ -493,7 +493,21 @@ class MonitorDatabase(object):
             return
 
         with db_lock:
-            connection.execute("BEGIN IMMEDIATE")
+            # Tolerate an external process holding the write lock with
+            # the same retry budget individual statements get
+            attempts = 0
+            while True:
+                try:
+                    connection.execute("BEGIN IMMEDIATE")
+                    break
+                except sqlite3.OperationalError as e:
+                    if "unable to open database file" not in str(e) and "database is locked" not in str(e):
+                        raise
+                    logger.warn("Tautulli Database :: Database Error: %s", e)
+                    attempts += 1
+                    if attempts >= 5:
+                        raise
+                    time.sleep(1)
             # Save and restore any enclosing transaction's connection (a
             # nested transaction on a different database file must not
             # clear the outer marker, or the outer block's remaining
