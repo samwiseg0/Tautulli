@@ -2022,7 +2022,14 @@ class WebInterface(object):
                 custom_where.append(['session_history.grandparent_rating_key IN', rating_key])
         if 'start_date' in kwargs:
             start_date = helpers.split_strip(kwargs.pop('start_date', ''))
-            if start_date:
+            if len(start_date) == 1:
+                # Compare against epoch bounds for the local day so the
+                # started index can be used instead of evaluating
+                # strftime() on every row
+                day_start, day_end = helpers.YMD_to_timestamp_range(start_date[0])
+                custom_where.append(["started >", day_start])
+                custom_where.append(["started <", day_end - 1])
+            elif start_date:
                 custom_where.append(["strftime('%Y-%m-%d', datetime(started, 'unixepoch', 'localtime'))", start_date])
         if 'before' in kwargs:
             before = [helpers.YMD_to_timestamp(t) for t in helpers.split_strip(kwargs.pop('before', ''))]
