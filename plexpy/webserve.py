@@ -5074,6 +5074,10 @@ class WebInterface(object):
             return {'result': 'error', 'message': 'Error downloading database. Check the logs.'}
 
         cherrypy.request.hooks.attach('on_end_request', helpers.delete_file, file_path=temp_path)
+        # Stream the response. Without this CherryPy buffers the whole
+        # body in memory before sending it, which on a multi-GB database
+        # is a multi-GB allocation and gets the process OOM killed.
+        cherrypy.response.stream = True
         return serve_download(temp_path, name=database_file)
 
     @cherrypy.expose
