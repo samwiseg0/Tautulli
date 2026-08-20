@@ -1,4 +1,4 @@
-# This file is part of Tautulli.
+﻿# This file is part of Tautulli.
 #
 #  Tautulli is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -455,6 +455,12 @@ class MonitorDatabase(object):
                 except sqlite3.DatabaseError as e:
                     logger.error("Tautulli Database :: Fatal Error executing %s :: %s", query, e)
                     raise
+
+            else:
+                # Out of retries. The caller is about to carry on as
+                # though the write happened, so say that it did not.
+                logger.error("Tautulli Database :: Gave up executing %s after %s attempts. "
+                             "The write was lost.", query, attempts)
 
             return sql_result
 

@@ -1,4 +1,4 @@
-# This file is part of Tautulli.
+﻿# This file is part of Tautulli.
 #
 #  Tautulli is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -2832,6 +2832,28 @@ def dbcheck():
     )
 
     logger.info("Database indices created.")
+
+    # Give every history row its group key.
+    #
+    # write_session_history inserts the row and group_history sets
+    # reference_id in a second statement, so the key is missing in
+    # between. database.action gives up quietly when it runs out of
+    # retries on a locked database, which leaves it missing for good.
+    # Everything that reads history groups by this column, so such a row
+    # joins one nameless group holding every other row that lost its key.
+    # The repair matches what group_history writes for a row it does not
+    # group. The row becomes its own group.
+    c_db.execute("UPDATE session_history SET reference_id = id WHERE reference_id IS NULL")
+
+    # The trigger runs inside the transaction that inserts the row, so
+    # the key cannot go missing again. group_history still moves the row
+    # into an earlier group afterwards. When that write fails, the row
+    # keeps a group of its own rather than none.
+    c_db.execute(
+        "CREATE TRIGGER IF NOT EXISTS session_history_reference_id "
+        "AFTER INSERT ON session_history WHEN NEW.reference_id IS NULL "
+        "BEGIN UPDATE session_history SET reference_id = NEW.id WHERE id = NEW.id; END"
+    )
 
     # Set database version
     result = c_db.execute("SELECT value FROM version_info WHERE key = 'version'").fetchone()
