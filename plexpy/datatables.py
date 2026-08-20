@@ -98,10 +98,10 @@ class DataTables(object):
             extracted_columns_union = extract_columns(columns=columns_union)
             group_u = build_grouping(group_by_union)
             c_where_u, cwu_args = build_custom_where(custom_where_union)
-            union = 'UNION SELECT %s FROM %s %s %s' % (extracted_columns_union['column_string'],
-                                                       table_name_union,
-                                                       c_where_u,
-                                                       group_u)
+            union = 'UNION ALL SELECT %s FROM %s %s %s' % (extracted_columns_union['column_string'],
+                                                           table_name_union,
+                                                           c_where_u,
+                                                           group_u)
         else:
             union = ''
             cwu_args = []
@@ -222,7 +222,11 @@ def build_custom_where(custom_where=None):
         and_or = ' OR ' if w[0].endswith('OR') else ' AND '
         w[0] = w[0].rstrip(' OR')
 
-        if w[0].endswith(' IN') and isinstance(w[1], (list, tuple)) and len(w[1]):
+        if '?' in w[0]:
+            # The condition already carries its own placeholders
+            c_where += w[0] + and_or
+            args += w[1] if isinstance(w[1], (list, tuple)) else [w[1]]
+        elif w[0].endswith(' IN') and isinstance(w[1], (list, tuple)) and len(w[1]):
             c_where += w[0] + ' (' + ','.join(['?'] * len(w[1])) + ')' + and_or
             args += w[1]
         elif isinstance(w[1], (list, tuple)) and len(w[1]):

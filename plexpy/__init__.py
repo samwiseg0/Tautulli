@@ -2743,9 +2743,12 @@ def dbcheck():
     logger.info("Creating database indices....")
 
     # Create session_history table indices
+    # reference_id trails started so the history page bound reads a
+    # page's group keys straight out of the index. The leading column
+    # still serves every query that filtered on started alone.
     c_db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_session_history_started "
-        "ON session_history (started)"
+        "CREATE INDEX IF NOT EXISTS idx_session_history_started_reference_id "
+        "ON session_history (started, reference_id)"
     )
     c_db.execute(
         "CREATE INDEX IF NOT EXISTS idx_session_history_stopped "
@@ -2799,6 +2802,11 @@ def dbcheck():
         "CREATE INDEX IF NOT EXISTS idx_session_history_reference_id "
         "ON session_history (reference_id ASC)"
     )
+
+    # A composite index now leads on started and serves every query the
+    # single-column one did. Dropping it removes a B-tree update from
+    # every history write.
+    c_db.execute("DROP INDEX IF EXISTS idx_session_history_started")
 
     # Create session_history_metadata table indices
     c_db.execute(
