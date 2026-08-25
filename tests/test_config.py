@@ -25,37 +25,20 @@ def test_defaults_from_empty_ini(app_config, name, expected, expected_type):
 # round trip: set, write(), reread with a fresh Config on the same file
 # ---------------------------------------------------------------------------
 
-def test_round_trip_int_setting(tmp_path):
+@pytest.mark.parametrize("name, value", [
+    ("PMS_PORT", 12345),
+    ("DATE_FORMAT", "MM/DD/YYYY"),
+    ("HOME_SECTIONS", ["watch_stats", "recently_added"]),
+])
+def test_round_trip_setting(tmp_path, name, value):
     ini_path = str(tmp_path / "config.ini")
     config = plexpy.config.Config(ini_path)
-    config.PMS_PORT = 12345
+    setattr(config, name, value)
     config.write()
 
     reloaded = plexpy.config.Config(ini_path)
-    assert reloaded.PMS_PORT == 12345
-    assert type(reloaded.PMS_PORT) is int
-
-
-def test_round_trip_str_setting(tmp_path):
-    ini_path = str(tmp_path / "config.ini")
-    config = plexpy.config.Config(ini_path)
-    config.DATE_FORMAT = "MM/DD/YYYY"
-    config.write()
-
-    reloaded = plexpy.config.Config(ini_path)
-    assert reloaded.DATE_FORMAT == "MM/DD/YYYY"
-    assert type(reloaded.DATE_FORMAT) is str
-
-
-def test_round_trip_list_setting(tmp_path):
-    ini_path = str(tmp_path / "config.ini")
-    config = plexpy.config.Config(ini_path)
-    config.HOME_SECTIONS = ["watch_stats", "recently_added"]
-    config.write()
-
-    reloaded = plexpy.config.Config(ini_path)
-    assert reloaded.HOME_SECTIONS == ["watch_stats", "recently_added"]
-    assert type(reloaded.HOME_SECTIONS) is list
+    assert getattr(reloaded, name) == value
+    assert type(getattr(reloaded, name)) is type(value)
 
 
 # ---------------------------------------------------------------------------

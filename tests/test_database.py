@@ -121,14 +121,13 @@ def test_upsert_updates_existing_row_without_duplicating(app_db):
     assert rows == [{"username": "carol2"}]
 
 
-def test_upsert_integrity_error_on_insert_is_swallowed(app_db):
+def test_upsert_failed_insert_writes_nothing_and_db_stays_usable(app_db):
     # username is NOT NULL; omitting it means the update matches nothing
     # (no such user_id yet) and the fallback insert then violates the
     # NOT NULL constraint. upsert() catches IntegrityError and logs it
     # rather than raising.
-    trans_type = app_db.upsert("users", {"email": "no-username@example.com"}, {"user_id": 999})
+    app_db.upsert("users", {"email": "no-username@example.com"}, {"user_id": 999})
 
-    assert trans_type == "insert"
     assert app_db.select_single("SELECT * FROM users WHERE user_id = ?", [999]) == {}
 
     # the connection is still usable afterwards
@@ -136,6 +135,15 @@ def test_upsert_integrity_error_on_insert_is_swallowed(app_db):
     assert app_db.select_single(
         "SELECT username FROM users WHERE user_id = ?", [1000]
     ) == {"username": "still-works"}
+
+
+@pytest.mark.xfail(reason="upsert() reports 'insert' even when the fallback insert was "
+                          "swallowed by IntegrityError, so callers like refresh_users and "
+                          "ActivityProcessor act on a row that was never written; "
+                          "fix on tfix/bug-upsert-insert-status")
+def test_upsert_failed_insert_does_not_report_insert(app_db):
+    trans_type = app_db.upsert("users", {"email": "no-username@example.com"}, {"user_id": 999})
+    assert trans_type != "insert"
 
 
 # ---------------------------------------------------------------------------
