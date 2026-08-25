@@ -139,8 +139,7 @@ def test_upsert_failed_insert_writes_nothing_and_db_stays_usable(app_db):
 
 @pytest.mark.xfail(reason="upsert() reports 'insert' even when the fallback insert was "
                           "swallowed by IntegrityError, so callers like refresh_users and "
-                          "ActivityProcessor act on a row that was never written; "
-                          "fix on tfix/bug-upsert-insert-status")
+                          "ActivityProcessor act on a row that was never written")
 def test_upsert_failed_insert_does_not_report_insert(app_db):
     trans_type = app_db.upsert("users", {"email": "no-username@example.com"}, {"user_id": 999})
     assert trans_type != "insert"
