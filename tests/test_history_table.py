@@ -28,11 +28,11 @@ HISTORY_COLUMNS = [
 ]
 
 
-def build_draw(order_column=None, direction="desc", start=0, length=25, search=""):
-    order = []
-    if order_column:
-        names = [c[0] for c in HISTORY_COLUMNS]
-        order = [{"column": names.index(order_column), "dir": direction}]
+def build_draw(order_column="date", direction="desc", start=0, length=25, search=""):
+    # build_datatables_json always defaults the order to date descending, so
+    # a real draw never arrives with an empty order list.
+    names = [c[0] for c in HISTORY_COLUMNS]
+    order = [{"column": names.index(order_column), "dir": direction}]
 
     return {
         "draw": 1,
