@@ -207,3 +207,54 @@ def test_second_instance_sees_data_committed_by_first(app_db):
         assert rows == [{"username": "frank"}]
     finally:
         second_db.connection.close()
+
+
+# ---------------------------------------------------------------------------
+# delete_rows_from_table(): chunks the id list so a single DELETE never
+# exceeds SQLite's default 999-variable limit (regression test for
+# ad195f09, "Fix deleteing more than 1000 history entries at the same
+# time" -- bulk-deleting a large library's history is a real UI/API action)
+# ---------------------------------------------------------------------------
+
+def test_delete_rows_from_table_bulk_delete_past_sqlite_variable_limit(app_db):
+    row_count = 1100
+    for user_id in range(row_count):
+        app_db.action("INSERT INTO session_history (user_id) VALUES (?)", [user_id])
+
+    ids = [row["id"] for row in app_db.select("SELECT id FROM session_history")]
+    assert len(ids) == row_count
+
+    result = plexpy.database.delete_rows_from_table("session_history", ids)
+
+    assert result is True
+    assert app_db.select_single("SELECT COUNT(*) AS c FROM session_history") == {"c": 0}
+
+
+def test_delete_rows_from_table_small_list_deletes_only_specified_rows(app_db):
+    for user_id in range(5):
+        app_db.action("INSERT INTO session_history (user_id) VALUES (?)", [user_id])
+
+    ids = [row["id"] for row in app_db.select("SELECT id FROM session_history ORDER BY id")]
+    ids_to_delete = ids[:3]
+
+    result = plexpy.database.delete_rows_from_table("session_history", ids_to_delete)
+
+    assert result is True
+    remaining = app_db.select("SELECT id FROM session_history ORDER BY id")
+    assert [row["id"] for row in remaining] == ids[3:]
+
+
+def test_delete_rows_from_table_accepts_comma_separated_id_string(app_db):
+    # webserve.py's delete_history_rows() passes row_ids as a comma
+    # separated string, e.g. "65,110,2,3645" -- not a list, so that's what
+    # delete_rows_from_table needs to accept from its real caller.
+    for user_id in range(3):
+        app_db.action("INSERT INTO session_history (user_id) VALUES (?)", [user_id])
+
+    ids = [row["id"] for row in app_db.select("SELECT id FROM session_history")]
+    row_ids_str = ",".join(str(i) for i in ids)
+
+    result = plexpy.database.delete_rows_from_table("session_history", row_ids_str)
+
+    assert result is True
+    assert app_db.select_single("SELECT COUNT(*) AS c FROM session_history") == {"c": 0}
