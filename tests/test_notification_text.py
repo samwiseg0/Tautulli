@@ -116,6 +116,14 @@ def test_eval_field_name_error_degrades_to_literal(app_config):
     assert str_format("{`nonexistent_name`}", {}) == "`nonexistent_name`"
 
 
+@pytest.mark.xfail(reason="CustomFormatter.parse drops a field wrapped in bare angle "
+                          "brackets to literal text: empty prefix and suffix strings "
+                          "fail the `if prefix or suffix` presence check; "
+                          "fix on tfix/bug-empty-prefix-suffix")
+def test_bare_angle_brackets_resolve_to_value(app_config):
+    assert str_format("{<rating>}", {"rating": "8.9"}) == "8.9"
+
+
 def test_eval_field_disabled_by_notify_text_eval_off(app_config):
     # With NOTIFY_TEXT_EVAL off, a backtick field is never sent to str_eval.
     # It is then treated as an unknown parameter and echoed back literally,
