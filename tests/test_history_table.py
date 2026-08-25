@@ -66,15 +66,21 @@ def call_history(grouping=True, custom_where=None, draw=None):
 # single row. started is distinct on every row so ordering and paging are
 # unambiguous.
 #
+# Row 6 is marked live (session_history_metadata.live=1) even though its
+# underlying media_type is "movie", same title as row 3 (Beta Movie). This
+# is what the media_type_live CASE expression in get_datatables_history is
+# for: media_type_live IN ['live'] must return row 6, and
+# media_type_live IN ['movie'] must exclude it despite the shared title.
+#
 # columns: id, reference_id, user_id, user, started, stopped, paused_counter,
-#          player, rating_key, title, media_type, transcode_decision
+#          player, rating_key, title, media_type, transcode_decision, live
 _HISTORY_ROWS = [
-    (1, 10, 1, "alice", 1000, 1300, 0, "Roku", 201, "Alpha Show - Episode 1", "episode", "direct play"),
-    (2, 10, 1, "alice", 1300, 1900, 50, "Chromecast", 201, "Alpha Show - Episode 1", "episode", "transcode"),
-    (3, 11, 2, "bob", 2000, 2600, 0, "Shield", 202, "Beta Movie", "movie", "transcode"),
-    (4, 12, 1, "alice", 3000, 3200, 0, "Roku", 203, "Gamma Track", "track", "direct play"),
-    (5, 13, 2, "bob", 4000, 4400, 0, "Shield", 201, "Alpha Show - Episode 1", "episode", "direct play"),
-    (6, 14, 1, "alice", 5000, 5900, 0, "Roku", 202, "Beta Movie", "movie", "transcode"),
+    (1, 10, 1, "alice", 1000, 1300, 0, "Roku", 201, "Alpha Show - Episode 1", "episode", "direct play", 0),
+    (2, 10, 1, "alice", 1300, 1900, 50, "Chromecast", 201, "Alpha Show - Episode 1", "episode", "transcode", 0),
+    (3, 11, 2, "bob", 2000, 2600, 0, "Shield", 202, "Beta Movie", "movie", "transcode", 0),
+    (4, 12, 1, "alice", 3000, 3200, 0, "Roku", 203, "Gamma Track", "track", "direct play", 0),
+    (5, 13, 2, "bob", 4000, 4400, 0, "Shield", 201, "Alpha Show - Episode 1", "episode", "direct play", 0),
+    (6, 14, 1, "alice", 5000, 5900, 0, "Roku", 202, "Beta Movie", "movie", "transcode", 1),
 ]
 
 
@@ -84,7 +90,7 @@ def seed_history(app_db):
     app_db.action("INSERT INTO users (user_id, username, friendly_name) VALUES (2, 'bob', '')")
 
     for (row_id, ref_id, user_id, user, started, stopped, paused,
-         player, rating_key, title, media_type, transcode) in _HISTORY_ROWS:
+         player, rating_key, title, media_type, transcode, live) in _HISTORY_ROWS:
         app_db.action(
             "INSERT INTO session_history (id, reference_id, started, stopped, rating_key, "
             "user_id, user, ip_address, paused_counter, player, product, platform, "
@@ -99,7 +105,7 @@ def seed_history(app_db):
             "grandparent_rating_key, title, full_title, year, duration, guid, live, media_type) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             [row_id, rating_key, rating_key - 1, rating_key - 2, title, title,
-             2020, 1800, "guid-%d" % rating_key, 0, media_type],
+             2020, 1800, "guid-%d" % rating_key, live, media_type],
         )
         app_db.action(
             "INSERT INTO session_history_media_info (id, rating_key, transcode_decision) "
@@ -230,3 +236,68 @@ def test_row_shape_has_fields_callers_render(app_db):
     assert row["started"] == 2000
     assert row["duration"] == 600  # stopped(2600) - started(2000) - paused(0)
     assert row["transcode_decision"] == "transcode"
+
+
+# ---------------------------------------------------------------------------
+# media_type_live filter: session_history_metadata.live folded into a
+# synthetic "live" media type via a CASE expression, so Live TV recordings
+# can be filtered like any other media_type even though there is no real
+# media_type value for it.
+#
+# Regression history:
+#   b9d4f57a - the live filter combined with another custom_where filter
+#              dropped the other filter.
+#   87389320 - the CASE literal was double-quoted, so SQLite read it as a
+#              column reference instead of the string 'live'.
+#   9432fee1 - media_type=all must pass through unfiltered.
+# ---------------------------------------------------------------------------
+
+def test_media_type_live_filter_returns_only_live_rows(app_db):
+    seed_history(app_db)
+
+    result = call_history(grouping=False, custom_where=[["media_type_live IN", ["live"]]])
+
+    assert result["recordsFiltered"] == 1
+    assert {row["row_id"] for row in result["data"]} == {6}
+
+
+def test_media_type_live_filter_excludes_live_rows_from_underlying_type(app_db):
+    seed_history(app_db)
+
+    # Row 6 is a live recording of a "movie"-typed item, same title as row 3
+    # (Beta Movie). Filtering on the real media_type must not pull it in
+    # just because session_history.media_type still says "movie".
+    result = call_history(grouping=False, custom_where=[["media_type_live IN", ["movie"]]])
+
+    assert result["recordsFiltered"] == 1
+    assert {row["row_id"] for row in result["data"]} == {3}
+
+
+def test_media_type_live_filter_combined_with_user_filter(app_db):
+    seed_history(app_db)
+
+    # b9d4f57a shape: a user filter and the live filter together, both must
+    # hold. Row 6 (the live row) belongs to alice (user_id 1), not bob.
+    alice_live = call_history(
+        grouping=False,
+        custom_where=[["session_history.user_id IN", ["1"]], ["media_type_live IN", ["live"]]],
+    )
+    assert {row["row_id"] for row in alice_live["data"]} == {6}
+
+    bob_live = call_history(
+        grouping=False,
+        custom_where=[["session_history.user_id IN", ["2"]], ["media_type_live IN", ["live"]]],
+    )
+    assert bob_live["data"] == []
+
+
+def test_media_type_live_row_carries_live_flag_and_underlying_media_type(app_db):
+    seed_history(app_db)
+
+    result = call_history(grouping=False, custom_where=[["media_type_live IN", ["live"]]])
+
+    row = result["data"][0]
+    assert row["row_id"] == 6
+    assert row["live"] == 1
+    # media_type_live is filter-only; the returned media_type stays the real type.
+    assert row["media_type"] == "movie"
