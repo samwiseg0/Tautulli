@@ -51,3 +51,74 @@ def test_prefix_suffix(app_config, template, expected):
 ])
 def test_prefix_suffix_with_unavailable_param(app_config, template, expected):
     assert str_format(template, {"rating": ""}) == expected
+
+
+# ---------------------------------------------------------------------------
+# Backtick eval fields, e.g. {`episode_num00 if season_num00 else 'N/A'`}.
+# CustomFormatter.parse()/_vformat() only route a field through str_eval when
+# NOTIFY_TEXT_EVAL is on, so each test below sets it explicitly.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("template, params, expected", [
+    ("{`1 + 1`}", {}, "2"),
+    ("{`episode_num00 if season_num00 else 'N/A'`}",
+     {"episode_num00": "05", "season_num00": "01"}, "05"),
+    ("{`episode_num00 if season_num00 else 'N/A'`}",
+     {"episode_num00": "05", "season_num00": ""}, "N/A"),
+])
+def test_eval_field(app_config, template, params, expected):
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format(template, params) == expected
+
+
+@pytest.mark.parametrize("template, params, expected", [
+    # A colon inside the eval expression must stay part of the expression,
+    # not get parsed as a str.format() format-spec separator (regression 05a00e98).
+    ("{`'a:b' if 1 else 'c'`}", {}, "a:b"),
+    ("{`'a:b' if 0 else 'c'`}", {}, "c"),
+    ("{`str(rating)[0:2]`}", {"rating": "8.9"}, "8."),
+])
+def test_eval_field_with_colon(app_config, template, params, expected):
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format(template, params) == expected
+
+
+@pytest.mark.parametrize("template, expected", [
+    ("{Prefix <`1 + 1`> Suffix}", "Prefix 2 Suffix"),
+    ("{Prefix <`1 + 1`>}", "Prefix 2"),
+    ("{<`1 + 1`> Suffix}", "2 Suffix"),
+    # An empty eval result suppresses the prefix and suffix too, same as a
+    # plain param (regression 3510224c).
+    ("{Prefix <`'' if True else 'x'`> Suffix}", ""),
+])
+def test_eval_field_prefix_suffix(app_config, template, expected):
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format(template, {}) == expected
+
+
+@pytest.mark.parametrize("template, expected", [
+    # An exclamation mark inside the eval expression must stay part of the
+    # expression, not get parsed as a str.format() conversion (regression 9fddcf30).
+    ("{`'it!s' + 'ok'`}", "it!sok"),
+    # A real conversion placed after the closing backtick still applies.
+    ("{`'a' if True else 'b'`!u}", "A"),
+])
+def test_eval_field_with_exclamation(app_config, template, expected):
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format(template, {}) == expected
+
+
+def test_eval_field_name_error_degrades_to_literal(app_config):
+    # A disallowed name in the eval expression must not crash the whole
+    # notification. _vformat catches the NameError from str_eval and falls
+    # back to the field's own (backtick-wrapped) source text.
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format("{`nonexistent_name`}", {}) == "`nonexistent_name`"
+
+
+def test_eval_field_disabled_by_notify_text_eval_off(app_config):
+    # With NOTIFY_TEXT_EVAL off, a backtick field is never sent to str_eval.
+    # It is then treated as an unknown parameter and echoed back literally,
+    # same as test_missing_key_is_literal.
+    app_config.NOTIFY_TEXT_EVAL = 0
+    assert str_format("{`1 + 1`}", {}) == "{`1 + 1`}"
