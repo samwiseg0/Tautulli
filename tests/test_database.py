@@ -1,0 +1,201 @@
+import sqlite3
+
+import pytest
+
+import plexpy.database
+
+
+# ---------------------------------------------------------------------------
+# action(): args=None branch, and the "no query" no-op
+# ---------------------------------------------------------------------------
+
+def test_action_with_no_args_executes_query(app_db):
+    result = app_db.action("SELECT 1 AS one")
+    assert result.fetchone() == {"one": 1}
+
+
+def test_action_with_none_query_returns_none(app_db):
+    assert app_db.action(None) is None
+
+
+# ---------------------------------------------------------------------------
+# insert / select / select_single round trip
+# ---------------------------------------------------------------------------
+
+def test_insert_and_select_round_trip(app_db):
+    app_db.action(
+        "INSERT INTO users (user_id, username, email) VALUES (?, ?, ?)",
+        [1, "alice", "alice@example.com"],
+    )
+
+    rows = app_db.select(
+        "SELECT user_id, username, email FROM users WHERE user_id = ?", [1]
+    )
+
+    assert rows == [{"user_id": 1, "username": "alice", "email": "alice@example.com"}]
+
+
+def test_select_returns_list_of_dict_rows(app_db):
+    # dbcheck() seeds a "Local" user (user_id 0), so scope the query to
+    # the rows this test actually inserted.
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "alice"])
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [2, "bob"])
+
+    rows = app_db.select(
+        "SELECT user_id, username FROM users WHERE user_id IN (1, 2) ORDER BY user_id"
+    )
+
+    assert rows == [
+        {"user_id": 1, "username": "alice"},
+        {"user_id": 2, "username": "bob"},
+    ]
+    assert all(isinstance(row, dict) for row in rows)
+
+
+def test_select_no_match_returns_empty_list(app_db):
+    assert app_db.select("SELECT * FROM users WHERE user_id = ?", [999]) == []
+
+
+def test_select_single_returns_one_row_as_dict(app_db):
+    app_db.action(
+        "INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "alice"]
+    )
+
+    row = app_db.select_single(
+        "SELECT username FROM users WHERE user_id = ?", [1]
+    )
+
+    assert row == {"username": "alice"}
+
+
+def test_select_single_no_match_returns_empty_dict(app_db):
+    assert app_db.select_single("SELECT * FROM users WHERE user_id = ?", [999]) == {}
+
+
+def test_session_history_round_trip_preserves_types(app_db):
+    # A second real table, with integer columns, to confirm dict_factory
+    # doesn't stringify values coming back out of sqlite.
+    app_db.action(
+        "INSERT INTO session_history (started, stopped, user_id, user, rating_key) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [1000, 2000, 1, "alice", 555],
+    )
+
+    row = app_db.select_single(
+        "SELECT started, stopped, user_id, user, rating_key FROM session_history"
+    )
+
+    assert row == {
+        "started": 1000,
+        "stopped": 2000,
+        "user_id": 1,
+        "user": "alice",
+        "rating_key": 555,
+    }
+    assert isinstance(row["started"], int)
+
+
+# ---------------------------------------------------------------------------
+# upsert()
+# ---------------------------------------------------------------------------
+
+def test_upsert_inserts_new_row(app_db):
+    trans_type = app_db.upsert(
+        "users", {"username": "bob", "email": "bob@example.com"}, {"user_id": 5}
+    )
+
+    assert trans_type == "insert"
+    row = app_db.select_single(
+        "SELECT username, email FROM users WHERE user_id = ?", [5]
+    )
+    assert row == {"username": "bob", "email": "bob@example.com"}
+
+
+def test_upsert_updates_existing_row_without_duplicating(app_db):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [7, "carol"])
+
+    trans_type = app_db.upsert("users", {"username": "carol2"}, {"user_id": 7})
+
+    assert trans_type == "update"
+    rows = app_db.select("SELECT username FROM users WHERE user_id = ?", [7])
+    assert rows == [{"username": "carol2"}]
+
+
+def test_upsert_integrity_error_on_insert_is_swallowed(app_db):
+    # username is NOT NULL; omitting it means the update matches nothing
+    # (no such user_id yet) and the fallback insert then violates the
+    # NOT NULL constraint. upsert() catches IntegrityError and logs it
+    # rather than raising.
+    trans_type = app_db.upsert("users", {"email": "no-username@example.com"}, {"user_id": 999})
+
+    assert trans_type == "insert"
+    assert app_db.select_single("SELECT * FROM users WHERE user_id = ?", [999]) == {}
+
+    # the connection is still usable afterwards
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1000, "still-works"])
+    assert app_db.select_single(
+        "SELECT username FROM users WHERE user_id = ?", [1000]
+    ) == {"username": "still-works"}
+
+
+# ---------------------------------------------------------------------------
+# action(): error paths raise, and the database stays usable afterwards
+# ---------------------------------------------------------------------------
+
+def test_action_bad_sql_raises_operational_error_and_db_stays_usable(app_db):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "alice"])
+
+    with pytest.raises(sqlite3.OperationalError):
+        app_db.action("SELECT * FROM no_such_table")
+
+    # prior committed data is untouched
+    assert app_db.select_single(
+        "SELECT username FROM users WHERE user_id = ?", [1]
+    ) == {"username": "alice"}
+
+    # new writes still work
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [2, "dave"])
+    assert len(app_db.select("SELECT * FROM users WHERE user_id IN (1, 2)")) == 2
+
+
+def test_action_constraint_violation_raises_integrity_error_and_db_stays_usable(app_db):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "alice"])
+
+    with pytest.raises(sqlite3.IntegrityError):
+        app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "duplicate"])
+
+    # the failed insert did not get committed, and the row was not changed
+    rows = app_db.select("SELECT username FROM users WHERE user_id = ?", [1])
+    assert rows == [{"username": "alice"}]
+
+    # new writes still work
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [2, "erin"])
+    assert len(app_db.select("SELECT * FROM users WHERE user_id IN (1, 2)")) == 2
+
+
+# ---------------------------------------------------------------------------
+# last_insert_id()
+# ---------------------------------------------------------------------------
+
+def test_last_insert_id_matches_inserted_row(app_db):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [42, "erin"])
+
+    inserted_id = app_db.last_insert_id()
+
+    row = app_db.select_single("SELECT id FROM users WHERE user_id = ?", [42])
+    assert inserted_id == row["id"]
+
+
+# ---------------------------------------------------------------------------
+# commit visibility across separate MonitorDatabase instances
+# ---------------------------------------------------------------------------
+
+def test_second_instance_sees_data_committed_by_first(app_db):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [11, "frank"])
+
+    second_db = plexpy.database.MonitorDatabase()
+    try:
+        rows = second_db.select("SELECT username FROM users WHERE user_id = ?", [11])
+        assert rows == [{"username": "frank"}]
+    finally:
+        second_db.connection.close()
