@@ -14,11 +14,45 @@ each insert (`last_id = db.last_insert_id(); self.group_history(last_id,
 session, metadata)`). ActivityProcessor() takes no constructor arguments
 and does not touch cherrypy request state, so it is used directly.
 
-Only the non-live path is covered: it is keyed off rating_key/view_offset
-and is what the plan calls out (resumed play, different user, different
-item, reference_id chaining). The live-TV path (grouped by guid within a
-1-day window) is a separate branch and out of scope here.
+The non-live path is keyed off rating_key/view_offset (resumed play,
+different user, different item, reference_id chaining). The live-TV path is
+a separate branch: it groups by guid (same channel/program) within a
+1-day window instead. Regression: commit 4582ff4a ("Fix grouping live tv
+history") -- before that fix the query had no time window and the boolean
+that decides whether to join a group parenthesized wrong, so live sessions
+could join a stale group from days ago, or fail to join a genuinely
+continuing one.
+
+The live query is:
+    SELECT session_history.id, session_history_metadata.guid, session_history.reference_id
+    FROM session_history
+    JOIN session_history_metadata ON session_history.id == session_history_metadata.id
+    WHERE session_history.id <= ? AND session_history.user_id = ?
+    AND datetime(session_history.started, 'unixepoch', 'localtime') > datetime('now', '-1 day')
+    ORDER BY session_history.id DESC LIMIT 1
+It reads only session_history.started/user_id/reference_id and
+session_history_metadata.guid, filtered against SQLite's real wall-clock
+'now' (not a fixture timestamp), and picks the single most recent row for
+that user, not the most recent row for that rating_key/guid. The guid
+match is then done in Python against that one row.
+
+Because it compares against the real clock, these tests compute
+timestamps as offsets from time.time() with margins (hours, days) far
+wider than the 1-day window boundary, so they cannot flake regardless of
+how long the test takes to run.
+
+Ordering matters for the fixtures: write_session_history calls
+group_history(last_id, session, metadata) *before* it writes the
+session_history_metadata row for that same id (see
+plexpy/activity_processor.py write_session_history: group_history at line
+~324, the session_history_metadata upsert at ~479). So a row being
+processed must not have its own metadata row yet when group_history runs
+on it -- otherwise the query could self-join and misgroup. The helpers
+below insert metadata only for already-processed rows, matching that
+order.
 """
+
+import time
 
 import pytest
 
@@ -136,5 +170,109 @@ def test_group_join_decision(db, prev_offset, new_offset, joins_group):
 
     insert_row(db, 2, user_id=1, rating_key=100, view_offset=new_offset)
     ap.group_history(2, session_for(1, 100))
+
+    assert reference_id_of(db, 2) == (1 if joins_group else 2)
+
+
+# --- Live-TV path -----------------------------------------------------
+#
+# session_history.started drives the 1-day window, and
+# session_history_metadata.guid drives the same-channel/program check.
+# insert_row/session_for above don't write either, so the helpers below
+# are separate, minimal variants for this branch only.
+
+def insert_live_row(db, row_id, user_id, started):
+    """Insert a lean session_history row for the live-TV query: id,
+    user_id, started (the window comparison). reference_id left NULL, as
+    a real insert leaves it. No session_history_metadata row here -- see
+    the module docstring on why that must come after group_history runs
+    on this id."""
+    db.action(
+        "INSERT INTO session_history (id, reference_id, user_id, started) "
+        "VALUES (?, NULL, ?, ?)",
+        [row_id, user_id, started],
+    )
+
+
+def insert_live_metadata(db, row_id, guid):
+    """Write session_history_metadata for a row group_history has already
+    processed, so a later row's query (which JOINs this table) can see
+    its guid. Only the columns the live query and the table's NOT NULL-free
+    schema need are filled in."""
+    db.action(
+        "INSERT INTO session_history_metadata "
+        "(id, rating_key, parent_rating_key, grandparent_rating_key, title, "
+        "full_title, year, duration, guid, live, media_type) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
+        [row_id, row_id, row_id, row_id, "Live show", "Live show", 2024, DURATION, guid, MOVIE],
+    )
+
+
+def live_session_for(user_id, guid):
+    """A live session dict with just the fields group_history's live
+    branch reads: 'live' (truthy to take this branch), 'user_id' (the
+    query filter), and 'guid' (metadata=None in these tests, so
+    new_session['guid'] falls back to session['guid'])."""
+    return {
+        "live": 1,
+        "user_id": user_id,
+        "guid": guid,
+    }
+
+
+def test_live_first_play_references_itself(db):
+    ap = activity_processor.ActivityProcessor()
+    now = int(time.time())
+
+    insert_live_row(db, 1, user_id=1, started=now)
+    ap.group_history(1, live_session_for(1, "guid-A"))
+
+    assert reference_id_of(db, 1) == 1
+
+
+def test_live_chain_keeps_head_id(db):
+    ap = activity_processor.ActivityProcessor()
+    now = int(time.time())
+
+    insert_live_row(db, 1, user_id=1, started=now)
+    ap.group_history(1, live_session_for(1, "guid-A"))
+    insert_live_metadata(db, 1, "guid-A")
+
+    insert_live_row(db, 2, user_id=1, started=now)
+    ap.group_history(2, live_session_for(1, "guid-A"))
+    insert_live_metadata(db, 2, "guid-A")
+
+    insert_live_row(db, 3, user_id=1, started=now)
+    ap.group_history(3, live_session_for(1, "guid-A"))
+
+    assert reference_id_of(db, 1) == 1
+    assert reference_id_of(db, 2) == 1
+    # Row 3 groups off row 2 (the live query only looks at the single
+    # most recent row), but row 2's reference_id already points at the
+    # head (row 1), so row 3 lands on the head too.
+    assert reference_id_of(db, 3) == 1
+
+
+@pytest.mark.parametrize(
+    "same_guid, within_window, joins_group",
+    [
+        (True, True, True),    # same channel/program, recently watched -> joins
+        (False, True, False),  # different channel/program -> new group
+        (True, False, False),  # same channel/program, but > 1 day ago -> new group
+    ],
+)
+def test_live_group_join_decision(db, same_guid, within_window, joins_group):
+    ap = activity_processor.ActivityProcessor()
+    now = int(time.time())
+    # Margins (1 hour / 3 days) are far wider than the 1-day boundary, so
+    # a slow test run can't flip the outcome.
+    prev_started = now - 3600 if within_window else now - 3 * 24 * 3600
+
+    insert_live_row(db, 1, user_id=1, started=prev_started)
+    ap.group_history(1, live_session_for(1, "guid-A"))
+    insert_live_metadata(db, 1, "guid-A")
+
+    insert_live_row(db, 2, user_id=1, started=now)
+    ap.group_history(2, live_session_for(1, "guid-A" if same_guid else "guid-B"))
 
     assert reference_id_of(db, 2) == (1 if joins_group else 2)
