@@ -131,3 +131,30 @@ def test_check_names_recurses_into_nested_code_objects():
     code = compile("[x.__class__ for x in items]", '<string>', 'eval')
     with pytest.raises(NameError):
         _check_names(code, {'items': None})
+
+
+# ---------------------------------------------------------------------------
+# str_eval has two independent defense layers: _check_names rejects a
+# disallowed name up front, and eval() itself runs with __builtins__
+# stripped out. Each is verified on its own below.
+# ---------------------------------------------------------------------------
+
+def test_eval_builtins_stripped_independent_of_check_names(monkeypatch):
+    # _check_names is the first defense layer. Disable it to prove the
+    # second layer holds on its own: eval runs with __builtins__ stripped,
+    # so a name _check_names missed still cannot resolve.
+    monkeypatch.setattr("plexpy.notification_handler._check_names", lambda *a, **k: None)
+    with pytest.raises(NameError):
+        str_eval("open('/etc/passwd')", {})
+
+
+@pytest.mark.parametrize("expr", [
+    "`1+1`X",
+    "X`1+1`",
+])
+def test_str_eval_rejects_malformed_backtick_wrapping(expr):
+    # strip('`') only trims backticks off the outer ends of the string, so
+    # text left outside a single matched pair of backticks is not valid
+    # Python and fails to compile.
+    with pytest.raises(SyntaxError):
+        str_eval(expr, {})

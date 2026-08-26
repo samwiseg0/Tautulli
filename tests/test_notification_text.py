@@ -16,6 +16,10 @@ def test_missing_key_is_literal(app_config):
     ("{video_codec!u}", {"video_codec": "hevc"}, "HEVC"),
     ("{content_rating!l}", {"content_rating": "TV-PG"}, "tv-pg"),
     ("{media_type!c}", {"media_type": "movie"}, "Movie"),
+    ("{value!r}", {"value": "test"}, "'test'"),
+    # !s combined with a width format spec: the conversion and the spec
+    # both apply.
+    ("{video_codec!s:10}", {"video_codec": 123}, "123       "),
 ])
 def test_conversion_modifiers(app_config, template, params, expected):
     assert str_format(template, params) == expected
@@ -26,10 +30,21 @@ def test_conversion_modifiers(app_config, template, params, expected):
     ("{actors:[:4]}", "Actor0, Actor1, Actor2, Actor3"),
     ("{actors:[2:]}", "Actor2, Actor3, Actor4"),
     ("{actors:[1:5]}", "Actor1, Actor2, Actor3, Actor4"),
+    # Trailing text after the closing ] makes the format_spec not match the
+    # [...]  slicing pattern at all, so format_field falls through and
+    # returns the value unchanged, slicing skipped.
+    ("{actors:[0]extra}", "Actor0, Actor1, Actor2, Actor3, Actor4"),
 ])
 def test_list_slicing(app_config, template, expected):
     actors = "Actor0, Actor1, Actor2, Actor3, Actor4"
     assert str_format(template, {"actors": actors}) == expected
+
+
+def test_list_slicing_falsy_value_is_empty(app_config):
+    # format_field's slicing branch only runs "if value and match"; a falsy
+    # value (e.g. an unavailable param resolving to None) short-circuits it
+    # and yields the empty field, not the literal text "None".
+    assert str_format("{actors:[0:2]}", {"actors": None}) == ""
 
 
 @pytest.mark.parametrize("template, expected", [
@@ -39,6 +54,17 @@ def test_list_slicing(app_config, template, expected):
     ("{Rating: <rating>/10}", "Rating: 8.9/10"),
 ])
 def test_prefix_suffix(app_config, template, expected):
+    assert str_format(template, {"rating": "8.9"}) == expected
+
+
+@pytest.mark.parametrize("template, expected", [
+    # A literal backslash-n in the prefix/suffix text is the user-facing way
+    # to put a line break in notification text; parse() turns it into a real
+    # newline.
+    (r"{Prefix\n <rating}", "Prefix\n 8.9"),
+    (r"{rating>\n Suffix}", "8.9\n Suffix"),
+])
+def test_prefix_suffix_literal_newline(app_config, template, expected):
     assert str_format(template, {"rating": "8.9"}) == expected
 
 
@@ -90,6 +116,15 @@ def test_eval_field_with_colon(app_config, template, params, expected):
     # An empty eval result suppresses the prefix and suffix too, same as a
     # plain param (regression 3510224c).
     ("{Prefix <`'' if True else 'x'`> Suffix}", ""),
+    # A `<` inside the eval expression must stay part of the expression, not
+    # get parsed as the prefix/suffix separator (it is protected by
+    # eval_regex matching the whole backtick span before the < / > split).
+    ("{Prefix <`1 < 2`> Suffix}", "Prefix True Suffix"),
+    # A conversion placed after the closing `>` of a prefix/suffix field is
+    # reconstructed into the suffix text along with the literal `!u`, not
+    # applied to the eval result -- that is the field's parsed shape once a
+    # prefix/suffix is present.
+    ("{Prefix <`1 + 1`> Suffix!u}", "Prefix 2 Suffix!u"),
 ])
 def test_eval_field_prefix_suffix(app_config, template, expected):
     app_config.NOTIFY_TEXT_EVAL = 1
