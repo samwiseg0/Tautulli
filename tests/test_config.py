@@ -1,6 +1,7 @@
 import pytest
 
 import plexpy.config
+from plexpy import logger
 
 
 # ---------------------------------------------------------------------------
@@ -81,3 +82,99 @@ def test_unparseable_int_falls_back_to_default(tmp_path):
     config = plexpy.config.Config(str(ini_path))
     assert config.PMS_PORT == 32400
     assert type(config.PMS_PORT) is int
+
+
+# ---------------------------------------------------------------------------
+# _upgrade(): the version-walk migration cascade runs on every non-import
+# Config() construction, from whatever CONFIG_VERSION is on disk up to the
+# latest. These lock in the terminal state after a full walk from 0, and a
+# walk that starts partway through with real old-style values.
+# ---------------------------------------------------------------------------
+
+def test_upgrade_migrates_fresh_config_to_latest_version(tmp_path):
+    ini_path = tmp_path / "config.ini"
+    ini_path.write_text("")
+
+    config = plexpy.config.Config(str(ini_path))
+
+    assert config.CONFIG_VERSION == 22
+    assert config.GIT_USER == "Tautulli"
+    assert config.GIT_REPO == "Tautulli"
+    assert config.HTTP_ROOT == ""
+    assert config.HTTP_HASH_PASSWORD == 1
+    assert config.ANON_REDIRECT == ""
+    assert config.ANON_REDIRECT_DYNAMIC == 1
+    assert config.PMS_UPDATE_CHANNEL == "plex"
+    assert config.CHECK_GITHUB_INTERVAL == 6
+
+
+def test_upgrade_migrates_old_style_values(tmp_path):
+    # config_version 9: a 'plexpass' update channel is renamed to 'beta'.
+    # config_version 15: a non-root, non-empty HTTP_ROOT forces a JWT secret
+    # rotation. Starting below both versions exercises the walk through them.
+    ini_path = tmp_path / "config.ini"
+    ini_path.write_text(
+        "[Advanced]\n"
+        "config_version = 3\n"
+        "\n"
+        "[PMS]\n"
+        "pms_update_channel = plexpass\n"
+        "\n"
+        "[General]\n"
+        "http_root = /tautulli/\n"
+    )
+
+    config = plexpy.config.Config(str(ini_path))
+
+    assert config.CONFIG_VERSION == 22
+    assert config.PMS_UPDATE_CHANNEL == "beta"
+    assert config.HTTP_ROOT == "/tautulli/"
+    assert config.JWT_UPDATE_SECRET == 1
+
+
+# ---------------------------------------------------------------------------
+# _blacklist(): token/password-like values get redacted from the logs.
+# logger._BLACKLIST_WORDS is a process-global set, so swap it out for a
+# fresh one and let monkeypatch put the real one back after the test.
+# ---------------------------------------------------------------------------
+
+def test_blacklist_redacts_tokens_and_passwords(tmp_path, monkeypatch):
+    monkeypatch.setattr(logger, "_BLACKLIST_WORDS", set())
+
+    ini_path = tmp_path / "config.ini"
+    ini_path.write_text(
+        "[PMS]\npms_token = supersecrettoken123\n"
+        "[General]\ndate_format = MM/DD/YYYY\n"
+    )
+
+    plexpy.config.Config(str(ini_path))
+
+    assert "supersecrettoken123" in logger._BLACKLIST_WORDS
+    assert "MM/DD/YYYY" not in logger._BLACKLIST_WORDS
+
+
+# ---------------------------------------------------------------------------
+# TAUTULLI_* environment overrides (documented Docker feature): an env var
+# wins over both the ini default and a later in-process setattr.
+# ---------------------------------------------------------------------------
+
+def test_env_override_wins_over_ini_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("TAUTULLI_PMS_PORT", "9999")
+    ini_path = tmp_path / "config.ini"
+
+    config = plexpy.config.Config(str(ini_path))
+
+    assert config.PMS_PORT == 9999
+    assert type(config.PMS_PORT) is int
+
+
+def test_env_override_wins_over_setattr(tmp_path, monkeypatch):
+    monkeypatch.setenv("TAUTULLI_PMS_PORT", "9999")
+    ini_path = tmp_path / "config.ini"
+    config = plexpy.config.Config(str(ini_path))
+
+    # set_setting() refuses to write when the env var is present, so the
+    # ini stays untouched and the env value keeps winning on read.
+    config.PMS_PORT = 12345
+
+    assert config.PMS_PORT == 9999
