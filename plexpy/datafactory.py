@@ -55,6 +55,13 @@ class DataFactory(object):
         if include_activity is None:
             include_activity = plexpy.CONFIG.HISTORY_TABLE_ACTIVITY
 
+        # The sessions table has no reference_id, so a draw filtered by
+        # group key holds no live session. Drop the union rather than
+        # filter a table on a column it does not have. This is the child
+        # table of an expanded history row.
+        if any(c[0].startswith('session_history.reference_id') for c in custom_where):
+            include_activity = False
+
         if session.get_session_user_id():
             session_user_id = str(session.get_session_user_id())
             added = False
@@ -1523,7 +1530,8 @@ class DataFactory(object):
                 pre_tautulli = 1
 
             stream_output = {'bitrate': item['bitrate'],
-                             'video_full_resolution': item['video_full_resolution'],
+                             'video_full_resolution': common.VIDEO_RESOLUTION_OVERRIDES.get(
+                                 item['video_full_resolution'], item['video_full_resolution']),
                              'optimized_version': item['optimized_version'],
                              'optimized_version_profile': item['optimized_version_profile'],
                              'optimized_version_title': item['optimized_version_title'],
@@ -1546,7 +1554,8 @@ class DataFactory(object):
                              'subtitle_forced': item['subtitle_forced'],
                              'subtitle_language': item['subtitle_language'],
                              'stream_bitrate': item['stream_bitrate'],
-                             'stream_video_full_resolution': item['stream_video_full_resolution'],
+                             'stream_video_full_resolution': common.VIDEO_RESOLUTION_OVERRIDES.get(
+                                 item['stream_video_full_resolution'], item['stream_video_full_resolution']),
                              'quality_profile': item['quality_profile'],
                              'stream_container_decision': item['stream_container_decision'],
                              'stream_container': item['stream_container'],
@@ -1643,7 +1652,8 @@ class DataFactory(object):
                            'bitrate': item['bitrate'],
                            'video_codec': item['video_codec'],
                            'video_resolution': item['video_resolution'],
-                           'video_full_resolution': item['video_full_resolution'],
+                           'video_full_resolution': common.VIDEO_RESOLUTION_OVERRIDES.get(
+                               item['video_full_resolution'], item['video_full_resolution']),
                            'video_framerate': item['video_framerate'],
                            'audio_codec': item['audio_codec'],
                            'audio_channels': item['audio_channels'],
@@ -2468,7 +2478,7 @@ class DataFactory(object):
     def get_user_devices(self, user_id='', history_only=True):
         monitor_db = database.MonitorDatabase()
 
-        if user_id:
+        if user_id is not None and user_id != '':
             if history_only:
                 query = "SELECT machine_id FROM session_history " \
                         "WHERE user_id = ? " \

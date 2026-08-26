@@ -2909,13 +2909,15 @@ class WebInterface(object):
 
             Returns:
                 json:
-                    [["May 08, 2016 09:35:37",
-                      "DEBUG",
-                      "Auth: Came in with a super-token, authorization succeeded."
-                      ],
-                     [...],
-                     [...]
-                     ]
+                    {"data":
+                        [["May 08, 2016 09:35:37",
+                          "DEBUG",
+                          "Auth: Came in with a super-token, authorization succeeded."
+                          ],
+                          [...],
+                          [...]
+                        ]
+                    }
             ```
         """
         if not plexpy.CONFIG.PMS_LOGS_FOLDER:
@@ -2928,7 +2930,7 @@ class WebInterface(object):
         logs = log_reader.get_log_tail(window=window, parsed=True, log_file=logfile)
 
         if logs:
-            return logs
+            return {'data': logs}
         else:
             logger.warn("Unable to retrieve Plex log file '%s'." % logfile)
             return {'result': 'error', 'message': "Plex log file '%s.log' not found." % logfile}
