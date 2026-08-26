@@ -133,6 +133,19 @@ def test_upgrade_migrates_old_style_values(tmp_path):
     assert config.JWT_UPDATE_SECRET == 1
 
 
+@pytest.mark.xfail(reason="the version 17 migration inserts top_libraries into "
+                          "home_stats_cards without checking presence, so an old "
+                          "config_version with no home_stats_cards line (the modern "
+                          "default already carries top_libraries) gets a duplicate")
+def test_upgrade_does_not_duplicate_top_libraries(tmp_path):
+    ini_path = tmp_path / "config.ini"
+    ini_path.write_text("[Advanced]\nconfig_version = 17\n")
+
+    config = plexpy.config.Config(str(ini_path))
+
+    assert config.HOME_STATS_CARDS.count("top_libraries") == 1
+
+
 def test_upgrade_migrates_more_old_style_values(tmp_path, monkeypatch):
     # config_version 3: a bare '/' HTTP_ROOT is stripped to ''.
     # config_version 5: MONITOR_PMS_UPDATES is forced off.
