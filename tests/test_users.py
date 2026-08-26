@@ -66,6 +66,17 @@ def test_undelete_user_id_zero(local_user):
     ) == {"deleted_user": 0, "keep_history": 1}
 
 
+def test_undelete_falls_through_to_username_for_a_non_numeric_user_id(local_user):
+    # A user_id that is not a number takes neither the numeric branch nor a
+    # lookup of its own, so the username is what restores the user.
+    local_user.action("UPDATE users SET deleted_user = 1, keep_history = 0 WHERE user_id = ?", [0])
+
+    assert Users().undelete(user_id="not-a-number", username="Local") is True
+    assert local_user.select_single(
+        "SELECT deleted_user FROM users WHERE user_id = ?", [0]
+    ) == {"deleted_user": 0}
+
+
 def test_datatables_user_login_filters_on_user_id_zero(local_user):
     local_user.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, "someone"])
     for row_user_id, user in ((0, "Local"), (1, "someone")):

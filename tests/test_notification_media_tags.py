@@ -41,13 +41,33 @@ def test_media_type_keeps_only_its_own_section(app_config, media_type, expected)
     assert (subject, body) == (expected, expected)
 
 
-def test_media_type_tags_are_case_insensitive_and_span_newlines(app_config):
-    subject, body = build_notify_text(subject="<MOVIE>M</MOVIE><Show>\nSH\n</Show>",
-                                      body="<episode>E</episode>",
-                                      notify_action="on_play",
-                                      parameters={"media_type": "movie"},
-                                      agent_id=10, test=True)
-    assert (subject, body) == ("M", "")
+MEDIA_TYPES = ["movie", "show", "season", "episode", "artist", "album", "track"]
+
+
+@pytest.mark.parametrize("media_type", MEDIA_TYPES)
+def test_media_type_tags_are_case_insensitive_and_span_newlines(app_config, media_type):
+    # Each media type has its own precompiled pattern, so the case and
+    # newline handling has to hold for every one of them, not just the first.
+    tag = media_type.upper()
+    other = "TRACK" if media_type != "track" else "MOVIE"
+    text = f"<{tag}>\nkept\n</{tag}><{other}>\ndropped\n</{other}>"
+
+    subject, _ = build_notify_text(subject=text, body="", notify_action="on_play",
+                                   parameters={"media_type": media_type},
+                                   agent_id=10, test=True)
+
+    assert subject == "kept"
+
+
+def test_unknown_media_type_drops_uppercase_sections_across_newlines(app_config):
+    # The fallback pattern needs the same two flags.
+    text = "<MOVIE>\ndropped\n</MOVIE><TRACK>\ndropped\n</TRACK> always"
+
+    subject, _ = build_notify_text(subject=text, body="", notify_action="on_play",
+                                   parameters={"media_type": "photo"},
+                                   agent_id=10, test=True)
+
+    assert subject == "always"
 
 
 def test_unmatched_media_tag_is_stripped(app_config):
