@@ -23,14 +23,17 @@ def email_notifier(app_db):
 
 
 def test_blank_password_keeps_the_saved_notifier_password(email_notifier):
-    notifiers.set_notifier_config(notifier_id=email_notifier,
-                                  email_smtp_password=BLANK,
-                                  email_smtp_server='mail.example.com')
+    assert notifiers.set_notifier_config(notifier_id=email_notifier,
+                                         email_smtp_password=BLANK,
+                                         email_smtp_server='mail.example.com',
+                                         email_html_support='0') is True
 
     config = notifiers.get_notifier_config(notifier_id=email_notifier)['config']
     assert config['smtp_password'] == 'hunter2'
-    # The rest of the form still applies.
+    # The rest of the form still applies, on both sides of the password. The
+    # skipped key is one key, not the end of the loop.
     assert config['smtp_server'] == 'mail.example.com'
+    assert config['html_support'] == 0
 
 
 def test_a_real_password_replaces_the_saved_notifier_password(email_notifier):
@@ -59,13 +62,18 @@ def newsletter(app_db, app_config, monkeypatch):
 
 
 def test_blank_password_keeps_the_saved_newsletter_password(newsletter):
-    newsletters.set_newsletter_config(newsletter_id=newsletter,
-                                      newsletter_email_smtp_password=BLANK,
-                                      newsletter_email_smtp_server='mail.example.com')
+    assert newsletters.set_newsletter_config(newsletter_id=newsletter,
+                                             newsletter_email_smtp_password=BLANK,
+                                             newsletter_email_smtp_server='mail.example.com',
+                                             newsletter_email_html_support='0',
+                                             newsletter_config_time_frame='14') is True
 
-    email_config = newsletters.get_newsletter_config(newsletter_id=newsletter)['email_config']
-    assert email_config['smtp_password'] == 'hunter2'
-    assert email_config['smtp_server'] == 'mail.example.com'
+    config = newsletters.get_newsletter_config(newsletter_id=newsletter)
+    assert config['email_config']['smtp_password'] == 'hunter2'
+    assert config['email_config']['smtp_server'] == 'mail.example.com'
+    assert config['email_config']['html_support'] == 0
+    # The newsletter's own config keys go through a second loop of their own.
+    assert config['config']['time_frame'] == 14
 
 
 def test_a_real_password_replaces_the_saved_newsletter_password(newsletter):
