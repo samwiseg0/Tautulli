@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
 from plexpy.datatables import (
+    DataTables,
     build_custom_where,
     build_grouping,
     build_join,
@@ -235,6 +238,39 @@ def test_build_custom_where_rating_key_in_or_triple():
     assert args == ['100', '200', '100', '200', '100', '200']
 
 
+@pytest.mark.parametrize("second_filter,expected_where,expected_args", [
+    # Plain scalar equality following an IN clause.
+    (
+        ['session_history.user_id', '1'],
+        "WHERE media_type_live IN (?) AND session_history.user_id = ?",
+        ['live', '1'],
+    ),
+    # None value -> IS NULL, following an IN clause.
+    (
+        ['session_history.user_id', None],
+        "WHERE media_type_live IN (?) AND session_history.user_id IS NULL",
+        ['live'],
+    ),
+    # List value without an "IN" suffix on the column name (datafactory.py
+    # get_history appends ['session_history.user_id', [user_id]] this way,
+    # after the media_type/other filters are already in custom_where).
+    (
+        ['session_history.user_id', ['1']],
+        "WHERE media_type_live IN (?) AND (session_history.user_id = ?)",
+        ['live', '1'],
+    ),
+])
+def test_build_custom_where_keeps_earlier_clause_when_combined(second_filter, expected_where, expected_args):
+    # c_where/args must accumulate across filters, not get overwritten by
+    # the last one; the leading IN clause must survive whatever follows it.
+    custom_where = [['media_type_live IN', ['live']], second_filter]
+
+    where, args = build_custom_where(custom_where)
+
+    assert where == expected_where
+    assert args == expected_args
+
+
 # ---------------------------------------------------------------------------
 # build_grouping
 # ---------------------------------------------------------------------------
@@ -291,3 +327,45 @@ def test_build_join_mixed_left_outer_and_inner():
         "JOIN session_history_metadata ON session_history.id = session_history_metadata.id "
         "JOIN session_history_media_info ON session_history.id = session_history_media_info.id "
     )
+
+
+# ---------------------------------------------------------------------------
+# DataTables.ssp_query
+# ---------------------------------------------------------------------------
+
+def test_ssp_query_drops_all_null_left_join_rows(app_db):
+    # datafactory.py get_history: session_history LEFT OUTER JOIN users, since
+    # a session's user may have since been deleted. When the query selects
+    # only the joined table's columns, an unmatched session comes back as a
+    # row of all NULLs and must be dropped, while a matched row survives.
+    app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [1, 'alice'])
+    app_db.action("INSERT INTO session_history (user_id) VALUES (?)", [1])
+    app_db.action("INSERT INTO session_history (user_id) VALUES (?)", [999])
+
+    kwargs = {'json_data': json.dumps({
+        'draw': 1,
+        'start': 0,
+        'length': 10,
+        'search': {'value': ''},
+        'order': [],
+        'columns': [
+            {'data': 'user_id', 'searchable': True},
+            {'data': 'username', 'searchable': True},
+        ],
+    })}
+
+    output = DataTables().ssp_query(
+        table_name='session_history',
+        columns=['users.user_id', 'users.username'],
+        join_types=['LEFT OUTER JOIN'],
+        join_tables=['users'],
+        join_evals=[['session_history.user_id', 'users.user_id']],
+        kwargs=kwargs,
+    )
+
+    # filteredCount is the SQL COUNT(*) OVER () taken before the NULL-row
+    # removal below, so it still counts both rows; only 'result' reflects
+    # the drop.
+    assert output['result'] == [{'user_id': 1, 'username': 'alice'}]
+    assert output['filteredCount'] == 2
+    assert output['totalCount'] == 2
