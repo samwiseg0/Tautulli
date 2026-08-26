@@ -145,6 +145,79 @@ def test_upsert_failed_insert_does_not_report_insert(app_db):
     assert trans_type != "insert"
 
 
+def test_upsert_with_composite_key_inserts_then_updates_matching_both_keys(app_db):
+    # libraries.py upserts into library_sections keyed on (server_id,
+    # section_id) together -- a real 2-column key_dict, unlike every other
+    # upsert test here. This pins the " AND ".join(...) WHERE clause: a
+    # survivor that mangles it into OR, or drops a key, would match rows it
+    # shouldn't and update/insert incorrectly.
+    trans_type = app_db.upsert(
+        "library_sections",
+        {"section_name": "Movies"},
+        {"server_id": "srv1", "section_id": 1},
+    )
+    assert trans_type == "insert"
+
+    # a row sharing only ONE of the two keys must be untouched by the update
+    app_db.action(
+        "INSERT INTO library_sections (server_id, section_id, section_name) VALUES (?, ?, ?)",
+        ["srv1", 2, "Other Library"],
+    )
+
+    trans_type = app_db.upsert(
+        "library_sections",
+        {"section_name": "Movies Renamed"},
+        {"server_id": "srv1", "section_id": 1},
+    )
+    assert trans_type == "update"
+
+    rows = app_db.select(
+        "SELECT server_id, section_id, section_name FROM library_sections ORDER BY section_id"
+    )
+    assert rows == [
+        {"server_id": "srv1", "section_id": 1, "section_name": "Movies Renamed"},
+        {"server_id": "srv1", "section_id": 2, "section_name": "Other Library"},
+    ]
+
+
+# ---------------------------------------------------------------------------
+# action(): retry exhaustion on a persistently locked database
+# ---------------------------------------------------------------------------
+
+class _AlwaysLockedConnection:
+    """Stands in for sqlite3.Connection: every `with self.connection as c`
+    (commit-on-success/rollback-on-exception context manager) then c.execute(...)
+    raises "database is locked", the one retryable OperationalError action()
+    handles."""
+
+    def __init__(self):
+        self.raise_count = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    def execute(self, query, args=None):
+        self.raise_count += 1
+        raise sqlite3.OperationalError("database is locked")
+
+
+def test_action_returns_none_after_five_failed_retries(app_db, monkeypatch):
+    fake_connection = _AlwaysLockedConnection()
+    monkeypatch.setattr(app_db, "connection", fake_connection)
+
+    sleep_calls = []
+    monkeypatch.setattr(plexpy.database.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    result = app_db.action("SELECT 1")
+
+    assert result is None
+    assert fake_connection.raise_count == 5
+    assert len(sleep_calls) == 5
+
+
 # ---------------------------------------------------------------------------
 # action(): error paths raise, and the database stays usable afterwards
 # ---------------------------------------------------------------------------
