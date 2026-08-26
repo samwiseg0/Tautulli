@@ -133,11 +133,10 @@ def test_upgrade_migrates_old_style_values(tmp_path):
     assert config.JWT_UPDATE_SECRET == 1
 
 
-@pytest.mark.xfail(reason="the version 17 migration inserts top_libraries into "
-                          "home_stats_cards without checking presence, so an old "
-                          "config_version with no home_stats_cards line (the modern "
-                          "default already carries top_libraries) gets a duplicate")
 def test_upgrade_does_not_duplicate_top_libraries(tmp_path):
+    # An old config_version with no home_stats_cards line already gets the
+    # modern default, which carries top_libraries. The version 17 migration
+    # must not insert a second one.
     ini_path = tmp_path / "config.ini"
     ini_path.write_text("[Advanced]\nconfig_version = 17\n")
 

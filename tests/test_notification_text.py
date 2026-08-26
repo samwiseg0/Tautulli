@@ -151,10 +151,9 @@ def test_eval_field_name_error_degrades_to_literal(app_config):
     assert str_format("{`nonexistent_name`}", {}) == "`nonexistent_name`"
 
 
-@pytest.mark.xfail(reason="CustomFormatter.parse drops a field wrapped in bare angle "
-                          "brackets to literal text: empty prefix and suffix strings "
-                          "fail the `if prefix or suffix` presence check")
 def test_bare_angle_brackets_resolve_to_value(app_config):
+    # Empty prefix and suffix text still counts as a prefix/suffix field.
+    # parse() must resolve it, not drop the whole field to literal text.
     assert str_format("{<rating>}", {"rating": "8.9"}) == "8.9"
 
 
