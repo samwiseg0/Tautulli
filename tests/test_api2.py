@@ -111,3 +111,13 @@ def test_fresh_plain_db_file_still_triggers_backup(sql_api):
     api.sql(query="SELECT 1")
 
     assert calls == [True]
+
+
+def test_sql_returns_query_result(sql_api):
+    # The above tests only check the backup side effect; also check that
+    # sql() actually runs the query and returns its rows.
+    api, backup_dir, calls = sql_api
+
+    result = api.sql(query="SELECT 1 AS one")
+
+    assert result == [{"one": 1}]
