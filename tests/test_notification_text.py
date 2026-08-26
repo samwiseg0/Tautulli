@@ -163,3 +163,31 @@ def test_eval_field_disabled_by_notify_text_eval_off(app_config):
     # same as test_missing_key_is_literal.
     app_config.NOTIFY_TEXT_EVAL = 0
     assert str_format("{`1 + 1`}", {}) == "{`1 + 1`}"
+
+
+# ---------------------------------------------------------------------------
+# Sentinel replacement around backtick eval fields. parse() swaps ':' and '!'
+# inside a backtick expression for sentinels so str.format() does not read
+# them as a format spec or a conversion, then swaps them back. The swap must
+# find the field that holds the eval expression, and only that field.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("template, expected", [
+    # Backticks in the literal text between two fields are markdown, not an
+    # eval expression. A ':' or '!' inside them must reach the notification
+    # unchanged, not as a leftover %%colon%% / %%exclamation%% sentinel.
+    ("{title} `a: b` {duration}", "Foo `a: b` 3600"),
+    ("{title} `a! b` {duration}", "Foo `a! b` 3600"),
+])
+def test_backticks_in_literal_text_keep_colons_and_exclamations(app_config, template, expected):
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format(template, {"title": "Foo", "duration": "3600"}) == expected
+
+
+def test_literal_backticks_do_not_shadow_a_later_eval_field(app_config):
+    # Literal backticks earlier in the text must not take the place of the
+    # real eval field. If they do, the field's ':' keeps its sentinel-free
+    # form, str.format() reads it as a format spec, and the field is cut in
+    # half.
+    app_config.NOTIFY_TEXT_EVAL = 1
+    assert str_format("{title} `a: b` {`'c:d'`}", {"title": "Foo"}) == "Foo `a: b` c:d"
