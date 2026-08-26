@@ -1,5 +1,7 @@
 import json
 
+import plexpy
+from plexpy import common
 from plexpy import datafactory
 
 
@@ -28,14 +30,14 @@ HISTORY_COLUMNS = [
 ]
 
 
-def build_draw(order_column="date", direction="desc", start=0, length=25, search=""):
+def build_draw(order_column="date", direction="desc", start=0, length=25, search="", draw=1):
     # build_datatables_json always defaults the order to date descending, so
     # a real draw never arrives with an empty order list.
     names = [c[0] for c in HISTORY_COLUMNS]
     order = [{"column": names.index(order_column), "dir": direction}]
 
     return {
-        "draw": 1,
+        "draw": draw,
         "start": start,
         "length": length,
         "search": {"value": search, "regex": False},
@@ -112,6 +114,38 @@ def seed_history(app_db):
             "VALUES (?,?,?)",
             [row_id, rating_key, transcode],
         )
+
+
+def insert_history_row(app_db, row_id, ref_id, user_id, user, started, stopped,
+                       rating_key, title, media_type, platform="Roku", view_offset=0,
+                       duration=1800, parent_thumb=None, grandparent_thumb=None):
+    # Same shape as seed_history's insert, but with the extra knobs (platform,
+    # view_offset, duration, thumbs) that the shared seed leaves at their
+    # column defaults. Used by tests that need one specific combination
+    # rather than extending the shared six-row seed.
+    app_db.action(
+        "INSERT INTO session_history (id, reference_id, started, stopped, rating_key, "
+        "user_id, user, ip_address, paused_counter, player, product, platform, "
+        "machine_id, location, secure, relayed, media_type, section_id, view_offset) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [row_id, ref_id, started, stopped, rating_key, user_id, user,
+         "10.0.0.%d" % user_id, 0, platform, "Plex", platform,
+         "mach%d" % row_id, "lan", 1, 0, media_type, 1, view_offset],
+    )
+    app_db.action(
+        "INSERT INTO session_history_metadata (id, rating_key, parent_rating_key, "
+        "grandparent_rating_key, title, full_title, year, duration, guid, live, media_type, "
+        "parent_thumb, grandparent_thumb) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [row_id, rating_key, rating_key - 1, rating_key - 2, title, title,
+         2021, duration, "guid-%d" % rating_key, 0, media_type,
+         parent_thumb, grandparent_thumb],
+    )
+    app_db.action(
+        "INSERT INTO session_history_media_info (id, rating_key, transcode_decision) "
+        "VALUES (?,?,?)",
+        [row_id, rating_key, "direct play"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +270,9 @@ def test_row_shape_has_fields_callers_render(app_db):
     assert row["started"] == 2000
     assert row["duration"] == 600  # stopped(2600) - started(2000) - paused(0)
     assert row["transcode_decision"] == "transcode"
+    # seed_history never sets view_offset, so it takes the column default of
+    # 0: percent_complete is 0/duration, i.e. 0.
+    assert row["percent_complete"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -301,3 +338,140 @@ def test_media_type_live_row_carries_live_flag_and_underlying_media_type(app_db)
     assert row["live"] == 1
     # media_type_live is filter-only; the returned media_type stays the real type.
     assert row["media_type"] == "movie"
+
+
+# ---------------------------------------------------------------------------
+# DataTables length: 0 means "no rows, counts only", -1 means "all rows".
+# Both are distinct from a normal positive page size, and from each other.
+# ---------------------------------------------------------------------------
+
+def test_length_zero_returns_no_rows_but_real_counts(app_db):
+    seed_history(app_db)
+
+    result = call_history(grouping=True, draw=build_draw(length=0))
+
+    assert result["data"] == []
+    assert result["recordsFiltered"] == 5
+    assert result["recordsTotal"] == 6
+
+
+def test_length_negative_one_returns_all_rows(app_db):
+    seed_history(app_db)
+
+    result = call_history(grouping=False, draw=build_draw(length=-1))
+
+    assert len(result["data"]) == 6
+    assert result["recordsFiltered"] == 6
+    assert result["recordsTotal"] == 6
+
+
+# ---------------------------------------------------------------------------
+# draw counter: the response must echo the request's draw value, so an
+# async client can match a response back to the request that asked for it.
+# ---------------------------------------------------------------------------
+
+def test_draw_counter_echoes_request(app_db):
+    seed_history(app_db)
+
+    result = call_history(grouping=False, draw=build_draw(draw=42))
+
+    assert result["draw"] == 42
+
+
+# ---------------------------------------------------------------------------
+# filter_duration/total_duration: human-readable summed play durations.
+# total_duration sums every session_history row matched by custom_where
+# (independent of the draw's search box and of grouping). filter_duration
+# sums only the play_duration of the rows the draw actually returns, so a
+# search that narrows the page makes the two diverge.
+# ---------------------------------------------------------------------------
+
+def test_duration_totals_match_seeded_play_durations(app_db):
+    seed_history(app_db)
+
+    # Row play_durations: 300, 550, 600, 200, 400, 900 -> 2950s = 49m10s,
+    # whether summed per-row or per-group (group 10 is rows 1+2 = 850).
+    result = call_history(grouping=False)
+    assert result["total_duration"] == "49 mins 10 secs"
+    assert result["filter_duration"] == "49 mins 10 secs"
+
+    grouped = call_history(grouping=True)
+    assert grouped["total_duration"] == "49 mins 10 secs"
+    assert grouped["filter_duration"] == "49 mins 10 secs"
+
+    # The draw's search box narrows the returned page to rows 3 and 6
+    # (600 + 900 = 1500s = 25 mins), but total_duration ignores search and
+    # still covers all 6 rows.
+    filtered = call_history(grouping=False, draw=build_draw(search="Beta"))
+    assert filtered["filter_duration"] == "25 mins"
+    assert filtered["total_duration"] == "49 mins 10 secs"
+    assert filtered["filter_duration"] != filtered["total_duration"]
+
+
+# ---------------------------------------------------------------------------
+# watched_status tiers: percent_complete against the *_WATCHED_PERCENT
+# config, in quarters of that threshold (1, 0.75, 0.5, 0.25, 0). Set
+# MOVIE_WATCHED_PERCENT explicitly so the tiers don't ride on the config
+# default. Base threshold = 80/4 = 20% per quarter.
+# ---------------------------------------------------------------------------
+
+def test_watched_status_tiers(app_db):
+    seed_history(app_db)
+    plexpy.CONFIG.MOVIE_WATCHED_PERCENT = 80
+
+    # (row_id, view_offset out of duration=1000, expected watched_status)
+    tiers = [
+        (101, 100, 0),      # 10%: below the first quarter (20%)
+        (102, 300, 0.25),   # 30%: at least one quarter, below two
+        (103, 500, 0.50),   # 50%: at least two quarters, below three
+        (104, 700, 0.75),   # 70%: at least three quarters, below check_watched
+        (105, 900, 1),      # 90%: >= MOVIE_WATCHED_PERCENT -> check_watched
+    ]
+    for row_id, view_offset, _ in tiers:
+        insert_history_row(app_db, row_id, ref_id=row_id, user_id=1, user="alice",
+                           started=row_id * 100, stopped=row_id * 100 + 90,
+                           rating_key=row_id, title="Tier Movie %d" % row_id,
+                           media_type="movie", view_offset=view_offset, duration=1000)
+
+    result = call_history(grouping=False,
+                          custom_where=[["session_history.reference_id IN", [str(r) for r, _, _ in tiers]]])
+
+    rows_by_id = {row["row_id"]: row for row in result["data"]}
+    for row_id, _, expected_status in tiers:
+        assert rows_by_id[row_id]["watched_status"] == expected_status
+
+    # percent_complete for the 30% row is asserted alongside its tier.
+    assert rows_by_id[102]["percent_complete"] == 30
+
+
+# ---------------------------------------------------------------------------
+# Row-field resolution: platform name overrides and the episode thumb
+# fallback (parent_thumb, falling back to grandparent_thumb) are computed
+# in get_datatables_history and never asserted elsewhere.
+# ---------------------------------------------------------------------------
+
+def test_platform_name_override_is_applied(app_db):
+    seed_history(app_db)
+    # 'windows' -> 'Windows' is a real entry in common.PLATFORM_NAME_OVERRIDES.
+    assert common.PLATFORM_NAME_OVERRIDES["windows"] == "Windows"
+    insert_history_row(app_db, row_id=201, ref_id=201, user_id=1, user="alice",
+                       started=9000, stopped=9100, rating_key=901, title="Override Movie",
+                       media_type="movie", platform="windows")
+
+    result = call_history(grouping=False, custom_where=[["session_history.reference_id IN", ["201"]]])
+
+    assert result["data"][0]["platform"] == "Windows"
+
+
+def test_episode_thumb_falls_back_to_parent_thumb(app_db):
+    seed_history(app_db)
+    insert_history_row(app_db, row_id=202, ref_id=202, user_id=1, user="alice",
+                       started=9200, stopped=9300, rating_key=902, title="Thumb Episode",
+                       media_type="episode", parent_thumb="/parent/thumb",
+                       grandparent_thumb="/grandparent/thumb")
+
+    result = call_history(grouping=False, custom_where=[["session_history.reference_id IN", ["202"]]])
+
+    # media_type == episode with parent_thumb set: parent_thumb wins over
+    # grandparent_thumb.
+    assert result["data"][0]["thumb"] == "/parent/thumb"
