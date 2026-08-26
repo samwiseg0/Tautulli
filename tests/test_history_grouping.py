@@ -158,6 +158,7 @@ def test_different_item_starts_new_group(db):
     "prev_offset, new_offset, joins_group",
     [
         (500, 600, True),   # forward resume of an unfinished play -> joins
+        (500, 500, True),   # equal view_offset (duplicate heartbeat/reconnect) -> join condition is <=, so it joins
         (950, 990, False),  # previous play already crossed the watched threshold -> new group
         (600, 100, False),  # view_offset went backwards (replay from the start) -> new group
     ],
@@ -170,6 +171,36 @@ def test_group_join_decision(db, prev_offset, new_offset, joins_group):
 
     insert_row(db, 2, user_id=1, rating_key=100, view_offset=new_offset)
     ap.group_history(2, session_for(1, 100))
+
+    assert reference_id_of(db, 2) == (1 if joins_group else 2)
+
+
+# check_watched (called from group_history for the non-live path) has a
+# marker-based branch: with WATCHED_MARKER = 3 (the db fixture's default)
+# and a real marker_credits_first on the *new* play's session dict, a
+# previous view_offset past the marker but below the percent threshold
+# still counts as watched, via `view_offset >= min(threshold, marker_first)`.
+# Every other test in this file passes marker_credits_first=None (via
+# session_for), so that branch never fires. threshold here is 900 (90% of
+# DURATION=1000); prev_offset=250 is below it, so only the marker -- not
+# the percent threshold -- can flip prev_watched to True.
+@pytest.mark.parametrize(
+    "marker_credits_first, joins_group",
+    [
+        (None, True),   # no marker -> percent check only (250 < 900) -> not watched -> joins
+        (200, False),   # marker: 250 >= min(900, 200) -> watched -> new group
+    ],
+)
+def test_marker_based_watched_flips_group_decision(db, marker_credits_first, joins_group):
+    ap = activity_processor.ActivityProcessor()
+
+    insert_row(db, 1, user_id=1, rating_key=100, view_offset=250)
+    ap.group_history(1, session_for(1, 100))
+
+    insert_row(db, 2, user_id=1, rating_key=100, view_offset=300)
+    new_session = session_for(1, 100)
+    new_session['marker_credits_first'] = marker_credits_first
+    ap.group_history(2, new_session)
 
     assert reference_id_of(db, 2) == (1 if joins_group else 2)
 
@@ -276,3 +307,32 @@ def test_live_group_join_decision(db, same_guid, within_window, joins_group):
     ap.group_history(2, live_session_for(1, "guid-A" if same_guid else "guid-B"))
 
     assert reference_id_of(db, 2) == (1 if joins_group else 2)
+
+
+def test_live_metadata_guid_drives_grouping(db):
+    # group_history's live branch takes the new play's guid from
+    # metadata['guid'] when metadata is truthy, falling back to
+    # session['guid'] only when metadata is None. Production always passes
+    # real metadata; every other test here passes metadata=None. Give the
+    # session dict a guid that would NOT match the previous row (so a
+    # fallback-to-session bug would start a new group) and confirm the
+    # metadata guid ("guid-A", matching the previous row) is what actually
+    # drives the join.
+    #
+    # metadata is also truthy enough to trigger group_history's debug
+    # logging, which reads session['session_key'] -- live_session_for()
+    # doesn't set that key (metadata=None in every other live test), so it
+    # must be added here.
+    ap = activity_processor.ActivityProcessor()
+    now = int(time.time())
+
+    insert_live_row(db, 1, user_id=1, started=now)
+    ap.group_history(1, live_session_for(1, "guid-A"))
+    insert_live_metadata(db, 1, "guid-A")
+
+    insert_live_row(db, 2, user_id=1, started=now)
+    session = live_session_for(1, "guid-B")
+    session['session_key'] = 2
+    ap.group_history(2, session, metadata={"guid": "guid-A"})
+
+    assert reference_id_of(db, 2) == 1
