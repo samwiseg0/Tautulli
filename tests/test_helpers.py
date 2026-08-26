@@ -30,6 +30,9 @@ from plexpy.notification_handler import format_group_index
     (90061000, "1 day 1 hr 1 min"),
     (400000000, "4 days 15 hrs 7 mins"),
     (1500, "2 secs"),
+    (2 * 86400000, "2 days"),
+    (2 * 3600000, "2 hrs"),
+    (2 * 60000, "2 mins"),
 ])
 def test_human_duration(ms, expected):
     assert human_duration(ms) == expected
@@ -50,6 +53,10 @@ def test_human_duration_significance(sig, expected):
     assert human_duration(90061000, sig=sig) == expected
 
 
+def test_human_duration_sig_dhms_rounds_up_to_one_second():
+    assert human_duration(1001, sig='dhms') == "1 sec"
+
+
 def test_human_duration_units_seconds():
     assert human_duration(65, units="s") == "1 min 5 secs"
 
@@ -63,6 +70,7 @@ def test_human_duration_units_seconds():
     (500, "500.0 B"),
     (1024, "1.00 kB"),
     (1048576, "1.00 MB"),
+    (5 * 1024**3, "5.00 GB"),
     ("abc", "abc"),
     ("", ""),
     (None, None),
@@ -80,6 +88,9 @@ def test_human_file_size(size, expected):
     (0, 100, 0),
     (100, 0, 0),
     (33, 100, 33),
+    (1, 100, 1),
+    (60, 100, 60),
+    (2, 3, 67),
     ("a", "b", 0),
     (None, None, 0),
     ("", "", 0),
@@ -252,6 +263,10 @@ def test_parse_condition_logic_string_malformed(logic, num_cond, match):
     ("{1} and {2} and {3}", [None, True, True, True], True),
     ("{1} and {2} or {3}", [None, False, True, True], True),
     ("{1} and {2} or {3}", [None, False, True, False], False),
+    ("{1} or {2} or {3} or {4}", [None, False, False, False, True], True),
+    ("{1} or {2} or {3} or {4}", [None, False, False, False, False], False),
+    ("{1} and {2} and {3} and {4}", [None, True, True, True, True], True),
+    ("{1} and {2} and {3} and {4}", [None, True, True, True, False], False),
 ])
 def test_eval_logic_groups_to_bool(logic, eval_conds, expected):
     logic_groups = parse_condition_logic_string(logic, len(eval_conds) - 1)
