@@ -74,6 +74,8 @@ def test_get_history_rejects_another_users_id(guest_bob):
     assert result["data"] == []
     assert result["recordsFiltered"] == 0
     assert result["recordsTotal"] == 0
+    assert result["draw"] == 0
+    assert result["filter_duration"] == "0"
     assert result["total_duration"] == "0"
 
 

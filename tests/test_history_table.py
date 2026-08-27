@@ -473,9 +473,10 @@ def test_platform_name_override_is_applied(app_db):
 
 def test_history_renders_a_sessions_row_with_no_media_type(app_db):
     seed_history(app_db)
+    app_db.action("UPDATE users SET thumb = 'plex-thumb-2' WHERE user_id = 2")
     app_db.action(
-        "INSERT INTO sessions (session_key, state, view_offset, stopped) "
-        "VALUES (42, 'playing', 100, 5000)")
+        "INSERT INTO sessions (session_key, state, view_offset, stopped, user_id) "
+        "VALUES (42, 'playing', 0, 5000, 2)")
 
     factory = datafactory.DataFactory()
     result = factory.get_datatables_history(
@@ -490,6 +491,12 @@ def test_history_renders_a_sessions_row_with_no_media_type(app_db):
     session_row = next(row for row in result["data"] if row["session_key"] == 42)
     assert session_row["state"] == "playing"
     assert session_row["media_type"] is None
+    # Active rows resolve the user thumb from the users table, because the
+    # sessions union selects NULL for it.
+    assert session_row["user_thumb"] == "plex-thumb-2"
+    # No media_type means a watched threshold of 0, and a 0 threshold puts
+    # any percent_complete in the >= 3 * base tier.
+    assert session_row["watched_status"] == 0.75
 
 
 def test_episode_thumb_falls_back_to_parent_thumb(app_db):
