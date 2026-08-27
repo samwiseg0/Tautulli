@@ -463,6 +463,35 @@ def test_platform_name_override_is_applied(app_db):
     assert result["data"][0]["platform"] == "Windows"
 
 
+# ---------------------------------------------------------------------------
+# A sessions row with no media_type. Before cc4fb641, set_session_state
+# could insert one holding only state, view_offset and stopped after the
+# real row was deleted, and the whole History page then failed with a
+# KeyError looking the missing media_type up in the watched_percent map.
+# The row must render instead.
+# ---------------------------------------------------------------------------
+
+def test_history_renders_a_sessions_row_with_no_media_type(app_db):
+    seed_history(app_db)
+    app_db.action(
+        "INSERT INTO sessions (session_key, state, view_offset, stopped) "
+        "VALUES (42, 'playing', 100, 5000)")
+
+    factory = datafactory.DataFactory()
+    result = factory.get_datatables_history(
+        kwargs={"json_data": json.dumps(build_draw(length=-1))},
+        custom_where=[],
+        grouping=False,
+        include_activity=True,
+    )
+
+    # 6 history rows plus the activity row.
+    assert result["recordsFiltered"] == 7
+    session_row = next(row for row in result["data"] if row["session_key"] == 42)
+    assert session_row["state"] == "playing"
+    assert session_row["media_type"] is None
+
+
 def test_episode_thumb_falls_back_to_parent_thumb(app_db):
     seed_history(app_db)
     insert_history_row(app_db, row_id=202, ref_id=202, user_id=1, user="alice",
