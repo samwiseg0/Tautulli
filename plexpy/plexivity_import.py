@@ -340,7 +340,7 @@ def import_from_plexivity(database_file=None, table_name=None, import_ignore_int
             user_id = extracted_xml['user_id']
 
         session_history = {'started': int(arrow.get(row['started']).timestamp()),
-                           'stopped': int(arrow.get(row['stopped']).timestamp()),
+                           'stopped': int(arrow.get(row['stopped']).timestamp()) if row['stopped'] else None,
                            'rating_key': extracted_xml['rating_key'],
                            'title': row['title'],
                            'parent_title': extracted_xml['parent_title'],
