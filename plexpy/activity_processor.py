@@ -422,7 +422,7 @@ class ActivityProcessor(object):
 
                 marker_credits_first = None
                 marker_credits_final = None
-                for marker in metadata['markers']:
+                for marker in metadata.get('markers', []):
                     if marker['first']:
                         marker_credits_first = marker['start_time_offset']
                     if marker['final']:
