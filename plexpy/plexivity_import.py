@@ -407,6 +407,7 @@ def import_from_plexivity(database_file=None, table_name=None, import_ignore_int
                                     'rating': extracted_xml['rating'],
                                     'duration': extracted_xml['duration'],
                                     'guid': extracted_xml['guid'],
+                                    'section_id': extracted_xml['section_id'],
                                     'directors': extracted_xml['directors'],
                                     'writers': extracted_xml['writers'],
                                     'actors': extracted_xml['actors'],
