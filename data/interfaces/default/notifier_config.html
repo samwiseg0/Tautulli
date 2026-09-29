@@ -958,7 +958,7 @@
                 enableKeyboardAccessibility: true
             });
             editor.session.setValue(textarea.val());
-            editor.on('change', function () { textarea.val(editor.getValue()).trigger('change'); });
+            editor.on('change', function () { textarea.val(editor.getValue()); });
         });
     });
 
