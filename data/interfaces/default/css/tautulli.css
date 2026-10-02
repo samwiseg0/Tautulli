@@ -3023,7 +3023,7 @@ a .home-platforms-list-cover-face:hover
     margin-top: 20px;
     margin-bottom: 20px;
     width: 100%;
-    max-width: 1750px;
+    max-width: max(1750px, 100% - 140px);
     overflow: hidden;
 }
 .table-card-header {
@@ -3036,7 +3036,7 @@ a .home-platforms-list-cover-face:hover
     margin-top: 20px;
     margin-bottom: -20px;
     width: 100%;
-    max-width: 1750px;
+    max-width: max(1750px, 100% - 140px);
     display: flow-root;
 }
 .table-card-back td {
