@@ -1,6 +1,6 @@
 ﻿<%
     import plexpy
-    plex_login = plexpy.CONFIG.HTTP_PLEX_ADMIN or plexpy.CONFIG.ALLOW_GUEST_ACCESS
+    plex_login = (plexpy.CONFIG.HTTP_PLEX_ADMIN or plexpy.CONFIG.ALLOW_GUEST_ACCESS) and plexpy.CONFIG.FIRST_RUN_COMPLETE
 %>
 <!doctype html>
 
@@ -79,6 +79,9 @@
                                 <ul class="submenu" style="${'display: block;' if not plex_login else ''}">
                                     <li>
                                         <form id="login-form">
+                                            % if not plexpy.CONFIG.FIRST_RUN_COMPLETE:
+                                            <p class="help-block">On a new install, the username and password are in the Tautulli log.</p>
+                                            % endif
                                             <div class="form-group">
                                                 <label for="username" class="control-label">
                                                     Username
