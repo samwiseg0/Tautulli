@@ -2518,6 +2518,10 @@ class PmsConnect(object):
             session = ap.get_session_by_key(session_key=session_key)
             if session and not session_id:
                 session_id = session['session_id']
+            elif session:
+                live = self.get_current_activity(session_key=session_key) or {}
+                if session_id not in [s['session_id'] for s in live.get('sessions', [])]:
+                    session = None
 
         elif session_id:
             session = ap.get_session_by_id(session_id=session_id)
