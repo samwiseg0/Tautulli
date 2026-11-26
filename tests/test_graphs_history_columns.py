@@ -7,9 +7,13 @@ episode (row 7) and a live track (row 8), which direct play. Every seed
 row is on 1970-01-01, so the time ranges reach back past it.
 """
 
+import json
+
 import pytest
 
 from plexpy import graphs, libraries
+from plexpy import webserve  # noqa: F401  (registers the handlers on API2)
+from plexpy.api2 import API2
 
 from tests.test_history_table import insert_history_row, seed_history
 
@@ -75,3 +79,15 @@ def test_concurrent_streams_split_by_stream_type(seeded):
     # No two plays of one stream type overlap.
     assert {name: count for name, count in totals(result).items()
             if name != "Max. Concurrent Streams"} == {"Direct Play": 1, "Direct Stream": 1, "Transcode": 1}
+
+
+@pytest.mark.parametrize("user_id, users", [("1", ["Alice"]), ("1,abc", [])])
+def test_graph_user_list_with_a_bad_id_matches_no_play(app_db, app_config, user_id, users):
+    seed_history(app_db)
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd="get_plays_by_top_10_users",
+                          time_range="36500", user_id=user_id)
+
+    assert json.loads(out)["response"]["data"]["categories"] == users
