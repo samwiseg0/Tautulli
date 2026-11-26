@@ -1165,6 +1165,8 @@ class WebInterface(object):
             ```
         """
         if (server_id and section_id) or row_ids:
+            if not row_ids and server_id != plexpy.CONFIG.PMS_IDENTIFIER:
+                return {'result': 'error', 'message': 'Server id does not match the Plex server identifier.'}
             library_data = libraries.Libraries()
             success = library_data.delete(server_id=server_id, section_id=section_id, row_ids=row_ids, purge_only=True)
             if success:
