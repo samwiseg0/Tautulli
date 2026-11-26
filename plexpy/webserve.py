@@ -1621,7 +1621,7 @@ class WebInterface(object):
                 user_id (str):                  The id of the Plex user
 
             Optional parameters:
-                order_column (str):             "date", "time", "ip_address", "host", "os", "browser"
+                order_column (str):             "timestamp", "ip_address", "host"
                 order_dir (str):                "desc" or "asc"
                 start (int):                    Row to start from, 0
                 length (int):                   Number of items to return, 25
