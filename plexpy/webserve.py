@@ -244,7 +244,8 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                None
+                all_servers (str):      "false" to list only local connections for servers behind the same
+                                        public address as Tautulli, and only remote connections for the others
 
             Returns:
                 json:
