@@ -7,6 +7,7 @@ from plexpy import common
 from plexpy import datafactory
 from plexpy import pmsconnect
 from plexpy import webserve
+from plexpy.api2 import API2
 
 
 # ---------------------------------------------------------------------------
@@ -605,3 +606,20 @@ def test_search_bound_reads_rows_without_metadata(app_db):
 
     assert [row["row_id"] for row in result["data"]] == [7]
     assert result["recordsFiltered"] == 1
+
+
+@pytest.mark.parametrize("guid, rows", [
+    ("guid-202?lang=en,guid-203", [3, 4, 6]),
+    ("guid-202,guid-203?lang=en", [3, 4, 6]),
+    ("guid-202,?lang=en", [3, 6]),
+    ("guid-202 ?lang=en", [3, 6]),
+])
+def test_history_guid_list_drops_the_query_of_each_guid(app_db, app_config, guid, rows):
+    seed_history(app_db)
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd="get_history", guid=guid, grouping="0",
+                          include_activity="0")
+
+    assert sorted(row["row_id"] for row in json.loads(out)["response"]["data"]["data"]) == rows

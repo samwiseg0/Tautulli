@@ -2159,7 +2159,8 @@ class WebInterface(object):
             if transcode_decision and 'all' not in transcode_decision:
                 custom_where.append(['session_history.transcode_decision IN', transcode_decision])
         if 'guid' in kwargs:
-            guid = helpers.split_strip(kwargs.pop('guid', '').split('?')[0])
+            guid = [g.split('?')[0].strip() for g in helpers.split_strip(kwargs.pop('guid', ''))]
+            guid = [g for g in guid if g]
             if guid:
                 custom_where.append(['session_history_metadata.guid LIKE', [f"{g}%" for g in guid]])
 
