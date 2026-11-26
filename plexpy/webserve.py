@@ -5392,6 +5392,8 @@ class WebInterface(object):
             ```
         """
 
+        delete_all = helpers.bool_true(delete_all)
+
         data_factory = datafactory.DataFactory()
         result = data_factory.delete_lookup_info(rating_key=rating_key, service=service, delete_all=delete_all)
 
