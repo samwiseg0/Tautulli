@@ -87,3 +87,12 @@ def test_get_user_logins_keeps_the_default_sort_for_unknown_columns(app_db, app_
     data = api_data(app_config, cmd="get_user_logins", user_id="0", order_column=order_column)
 
     assert [row["timestamp"] for row in data["data"]] == [3000, 2000, 1000]
+
+
+@pytest.mark.parametrize("friendly_name, stored", [("alice", None), ("Al", "Al")])
+def test_edit_user_with_the_username_clears_the_friendly_name(app_db, friendly_name, stored):
+    app_db.action("INSERT INTO users (user_id, username, friendly_name) VALUES (1, 'alice', 'Old Alias')")
+
+    webserve.WebInterface().edit_user(user_id="1", friendly_name=friendly_name)
+
+    assert app_db.select_single("SELECT friendly_name FROM users WHERE user_id = 1")["friendly_name"] == stored

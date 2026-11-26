@@ -434,14 +434,12 @@ class Users(object):
             monitor_db = database.MonitorDatabase()
 
             user = monitor_db.select_single('SELECT username FROM users WHERE user_id = ?', [user_id])
-            if user.get('username') == friendly_name:
-                friendly_name = None
 
             key_dict = {'user_id': user_id}
             value_dict = {}
 
             if friendly_name is not None:
-                value_dict['friendly_name'] = friendly_name
+                value_dict['friendly_name'] = None if friendly_name == user.get('username') else friendly_name
             if custom_thumb is not None:
                 value_dict['custom_avatar_url'] = custom_thumb
             if keep_history is not None:
