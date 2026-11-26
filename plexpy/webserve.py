@@ -4680,7 +4680,7 @@ class WebInterface(object):
                 rating_key (str):       Rating key of the item
 
             Optional parameters:
-                media_type (str):       Media type of the item (only required for a collection)
+                media_type (str):       Media type of the item (only required for a collection or playlist)
                 grouping (int):         0 or 1
                 query_days (str):       Comma separated days, e.g. "1,7,30,0"
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -4740,7 +4740,7 @@ class WebInterface(object):
                 rating_key (str):       Rating key of the item
 
             Optional parameters:
-                media_type (str):       Media type of the item (only required for a collection)
+                media_type (str):       Media type of the item (only required for a collection or playlist)
                 grouping (int):         0 or 1
                 include_archived (int): 0 or 1, include archived users and libraries
 
