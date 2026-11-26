@@ -8,10 +8,13 @@ and the tests archive that library. alice keeps rows 1, 2, 4, 6 in
 section 1.
 """
 
+import json
+
 import pytest
 
 import plexpy
 from plexpy import database, datafactory, graphs, libraries, users, webserve
+from plexpy.api2 import API2
 
 from tests.test_archive_users import (ARCHIVED_INDICATOR, checkbox_tag, GRAPH_ENDPOINTS, library, page_badges,  # noqa: F401
                                       SHOW_ARCHIVED, seeded, show_archived_pages, web_pages)
@@ -289,6 +292,17 @@ def test_most_concurrent_skips_archived_library(late_bob):
     stats = datafactory.DataFactory().get_home_stats(stats_cards=["most_concurrent"], after="1970-01-01")
 
     assert stats[0]["rows"][0]["count"] == 1
+
+
+@pytest.mark.parametrize("params, count", [({}, 2), ({"user_id": "1"}, 1), ({"section_id": "1"}, 1)])
+def test_most_concurrent_takes_the_user_and_library_filters(late_bob, app_config, params, count):
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd="get_home_stats", stat_id="most_concurrent",
+                          after="1970-01-01", **params)
+
+    assert json.loads(out)["response"]["data"]["rows"][0]["count"] == count
 
 
 def test_item_stats_skip_archived_library(two_libraries):

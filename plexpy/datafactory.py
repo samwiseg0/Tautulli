@@ -1340,10 +1340,8 @@ class DataFactory(object):
                             "FROM session_history AS sh " \
                             "JOIN session_history_media_info AS shmi ON sh.id = shmi.id " \
                             "WHERE %s %s " % (where_timeframe[4:].replace('session_history.', 'sh.'),
-                                              '' if include_archived else
-                                              users.archived_user_cond(column='sh.user_id') +
-                                              libraries.archived_library_cond(column='sh.section_id'))
-                    result = monitor_db.select(query, args=where_timeframe_args)
+                                              where_id.replace('session_history.', 'sh.'))
+                    result = monitor_db.select(query, args=where_timeframe_args + where_id_args)
 
                     categories = {'Concurrent Streams': None,
                                   'Concurrent Transcodes': 'transcode',
