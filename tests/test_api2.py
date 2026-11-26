@@ -14,6 +14,7 @@ API sql call):
   backup and backed up on every query again. Fixed to match ``.db.zip``.
 """
 
+import json
 import time
 
 import pytest
@@ -121,3 +122,23 @@ def test_sql_returns_query_result(sql_api):
     result = api.sql(query="SELECT 1 AS one")
 
     assert result == [{"one": 1}]
+
+
+@pytest.mark.parametrize("sort, order, msgs", [
+    ("loglevel", "desc", ["second", "first", "third"]),
+    ("loglevel", "asc", ["third", "first", "second"]),
+    ("time", "desc", ["third", "second", "first"]),
+    ("", "desc", ["third", "second", "first"]),
+])
+def test_get_logs_sort_keeps_the_order(app_config, tmp_path, sort, order, msgs):
+    (tmp_path / "tautulli.log").write_text(
+        "2026-01-01 00:00:01 - INFO :: MainThread : first\n"
+        "2026-01-01 00:00:02 - WARNING :: MainThread : second\n"
+        "2026-01-01 00:00:03 - DEBUG :: MainThread : third\n", encoding="utf-8")
+    app_config.LOG_DIR = str(tmp_path)
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd="get_logs", sort=sort, order=order)
+
+    assert [line["msg"] for line in json.loads(out)["response"]["data"]] == msgs

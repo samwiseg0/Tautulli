@@ -244,7 +244,7 @@ class API2(object):
 
         if sort:
             logger.api_debug("Tautulli APIv2 :: Sorting log based on '%s'" % sort)
-            templog = sorted(templog, key=lambda k: k[sort])
+            templog = sorted(templog, key=lambda k: k[sort], reverse=(order == 'desc'))
 
         if end > 0 or start > 0:
             logger.api_debug("Tautulli APIv2 :: Slicing the log from %s to %s" % (start, end))
