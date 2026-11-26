@@ -53,7 +53,7 @@ def test_image_proxy_serves_the_fallback_image(api, monkeypatch):
                width="300", img_format="jpg", refresh="1", clip="1") == (200, b"fallback")
     first, fallback = requests
     assert fallback == dict(first, img="/library/metadata/6/thumb")
-    assert (fallback["width"], fallback["img_format"], fallback["refresh"], fallback["clip"]) == ("300", "jpg", "1", True)
+    assert (fallback["width"], fallback["img_format"], fallback["refresh"], fallback["clip"]) == ("300", "jpg", True, True)
 
 
 def test_get_server_id_returns_the_server_url(api, monkeypatch):

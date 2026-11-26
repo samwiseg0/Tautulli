@@ -4907,7 +4907,7 @@ class WebInterface(object):
         """ See real_pms_image_proxy docs string"""
 
         refresh = False
-        if kwargs.get('refresh') or 'no-cache' in cherrypy.request.headers.get('Cache-Control', ''):
+        if helpers.bool_true(kwargs.get('refresh')) or 'no-cache' in cherrypy.request.headers.get('Cache-Control', ''):
             refresh = False if get_session_user_id() else True
 
         kwargs['refresh'] = refresh
@@ -5018,6 +5018,7 @@ class WebInterface(object):
             os.makedirs(c_dir, exist_ok=True)
 
         clip = helpers.bool_true(clip)
+        refresh = helpers.bool_true(refresh)
 
         try:
             if not plexpy.CONFIG.CACHE_IMAGES or refresh or 'indexes' in img:

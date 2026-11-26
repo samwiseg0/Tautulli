@@ -13,6 +13,7 @@ import pytest
 
 from plexpy import pmsconnect
 from plexpy import webserve
+from plexpy.api2 import API2
 
 TEMPLATES = Path(__file__).resolve().parent.parent / "data/interfaces/default"
 OLD = b"old image"
@@ -117,6 +118,19 @@ def test_cached_image_is_served_with_its_content_type(cache, monkeypatch, img_fo
     (kwargs,) = served
     assert kwargs["path"].endswith("." + img_format)
     assert kwargs["content_type"] == content_type
+
+
+@pytest.mark.parametrize("refresh, image", [("false", OLD), ("0", OLD), ("1", NEW), ("True", NEW)])
+def test_refresh_false_serves_the_cached_image(cache, app_config, monkeypatch, refresh, image):
+    monkeypatch.setattr(webserve, "serve_file", lambda path, content_type: Path(path).read_bytes())
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    cached_file(cache)
+    assert API2()._api_run(apikey=app_config.API_KEY, cmd="pms_image_proxy",
+                           img="/library/metadata/1/thumb/2", refresh=refresh) == image
+    cached_file(cache)
+    assert webserve.WebInterface().pms_image_proxy(img="/library/metadata/1/thumb/2", refresh=refresh) == image
 
 
 @pytest.mark.parametrize("template, call", [
