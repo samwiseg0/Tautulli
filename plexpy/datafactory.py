@@ -2141,7 +2141,7 @@ class DataFactory(object):
                     "GROUP BY rating_key" % where
             results = monitor_db.select(query, args=args)
 
-            if delete_all:
+            if delete_all and not rating_key:
                 helpers.delete_from_cloudinary(delete_all=delete_all)
             else:
                 for cloudinary_info in results:
