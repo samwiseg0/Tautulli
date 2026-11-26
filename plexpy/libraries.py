@@ -505,7 +505,7 @@ class Libraries(object):
 
         # Get the library details
         library_details = self.get_details(section_id=section_id)
-        if library_details['section_id'] == None:
+        if section_id and not library_details['section_id']:
             logger.warn("Tautulli Libraries :: Library section_id %r not found." % section_id)
             return default_return
 
@@ -684,7 +684,7 @@ class Libraries(object):
 
         # Get the library details
         library_details = self.get_details(section_id=section_id)
-        if library_details['section_id'] == None:
+        if section_id and not library_details['section_id']:
             logger.warn("Tautulli Libraries :: Library section_id %r not found." % section_id)
             return False
         if library_details['section_type'] == 'photo':
