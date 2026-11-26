@@ -487,6 +487,9 @@ def get_notify_actions(return_dict=False):
 def get_notifiers(notifier_id=None, notify_action=None, include_last_triggered=False):
     notify_actions = get_notify_actions()
 
+    if notify_action and notify_action not in notify_actions:
+        return []
+
     where = where_id = where_action = ''
     args = []
 
