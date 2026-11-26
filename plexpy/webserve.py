@@ -1979,9 +1979,12 @@ class WebInterface(object):
             Optional parameters:
                 grouping (int):                 0 or 1
                 include_activity (int):         0 or 1
-                include_archived (int):         0 or 1, include history of archived users and libraries
-                user (str):                     "Jon Snow"
-                user_id (int):                  133788
+                include_archived (int):         0 or 1, include history of archived users and libraries.
+                                                With 0, user, user_id or section_id still matches
+                                                its archived user or library.
+                user (str):                     Comma separated usernames, e.g. "DanyKhaleesi69",
+                                                ignored when user_id is given
+                user_id (str):                  Comma separated user ids, e.g. "133788"
                 rating_key (int):               4348
                 parent_rating_key (int):        544
                 grandparent_rating_key (int):   351
@@ -1992,7 +1995,7 @@ class WebInterface(object):
                 media_type (str):               "movie", "episode", "track", "live", "collection", "playlist"
                 transcode_decision (str):       "direct play", "copy", "transcode",
                 guid (str):                     Plex guid for an item, e.g. "com.plexapp.agents.thetvdb://121361/6/1"
-                order_column (str):             "date", "friendly_name", "ip_address", "platform", "player",
+                order_column (str):             "date", "friendly_name", "ip_address", "platform", "product", "player",
                                                 "full_title", "started", "paused_counter", "stopped", "duration"
                 order_dir (str):                "desc" or "asc"
                 start (int):                    Row to start from, 0
