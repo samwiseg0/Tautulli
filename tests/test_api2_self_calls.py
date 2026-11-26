@@ -81,13 +81,26 @@ def test_get_server_id_returns_the_server_url(api, monkeypatch):
     monkeypatch.setattr(plextv.PlexTV, "discover", lambda self: servers)
     monkeypatch.setattr(plextv, "get_server_resources", get_server_resources)
 
-    status, out = api(cmd="get_server_id", hostname="1.2.3.4", port="32400", ssl="1", manual="1", get_url=1)
+    status, out = api(cmd="get_server_id", hostname="1.2.3.4", port="32400", ssl="1", manual="0", get_url=1)
 
     assert status == 200
     assert json.loads(out)["response"]["data"] == {"identifier": "abc", "url": "https://1.2.3.4:32400", "ws": None}
     # ssl and manual differ so a swap of the two also fails.
     assert requests == [{"return_server": True, "pms_ip": "1.2.3.4", "pms_port": "32400", "pms_ssl": True,
-                         "pms_url_manual": "1", "pms_identifier": "abc"}]
+                         "pms_url_manual": False, "pms_identifier": "abc"}]
+
+
+@pytest.mark.parametrize("manual, scheme", [("true", "https"), ("1", "https"), ("false", "http"), ("0", "http")])
+def test_get_server_id_reads_manual_as_a_bool(api, monkeypatch, manual, scheme):
+    monkeypatch.setattr(plextv.PlexTV, "discover", lambda self: [{"ip": "1.2.3.4", "port": "32400",
+                                                                  "clientIdentifier": "abc"}])
+    monkeypatch.setattr(plextv.PlexTV, "get_server_connections", lambda self, **kwargs: None)
+    monkeypatch.setattr(plextv.PlexTV, "get_plexpass_status", lambda self: False)
+
+    status, out = api(cmd="get_server_id", hostname="1.2.3.4", port="32400", ssl="1", manual=manual, get_url=1)
+
+    assert status == 200
+    assert json.loads(out)["response"]["data"]["url"] == scheme + "://1.2.3.4:32400"
 
 
 def test_borrowed_handlers_use_only_api2_attributes():

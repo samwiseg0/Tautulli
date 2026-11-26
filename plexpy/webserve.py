@@ -4253,6 +4253,7 @@ class WebInterface(object):
             ```
         """
         ssl = helpers.bool_true(ssl)
+        manual = helpers.bool_true(manual)
 
         # Attempt to get the pms_identifier from plex.tv if the server is published
         # Works for all PMS SSL settings
