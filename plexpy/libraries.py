@@ -1190,7 +1190,7 @@ class Libraries(object):
             for library in result:
                 success.append(self.delete(server_id=library['server_id'], section_id=library['section_id'],
                                            purge_only=purge_only))
-            return all(success)
+            return bool(success) and all(success)
 
         elif str(section_id).isdigit():
             server_id = server_id or plexpy.CONFIG.PMS_IDENTIFIER

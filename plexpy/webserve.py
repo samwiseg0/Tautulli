@@ -1158,7 +1158,7 @@ class WebInterface(object):
                 section_id (str):       The id of the Plex library section
 
             Optional parameters:
-                row_ids (str):          Comma separated row ids to delete, e.g. "2,3,8"
+                row_ids (str):          Comma separated library row_id values from get_libraries_table, e.g. "2,3,8"
 
             Returns:
                 None
@@ -1187,7 +1187,7 @@ class WebInterface(object):
                 server_id (str):        The Plex server identifier of the library section
                 section_id (str):       The id of the Plex library section
                 or
-                row_ids (str):          Comma separated row ids to delete, e.g. "2,3,8"
+                row_ids (str):          Comma separated library row_id values from get_libraries_table, e.g. "2,3,8"
 
             Optional parameters:
                 None
@@ -1868,7 +1868,7 @@ class WebInterface(object):
                 user_id (str):          The id of the Plex user
 
             Optional parameters:
-                row_ids (str):          Comma separated row ids to delete, e.g. "2,3,8"
+                row_ids (str):          Comma separated user row_id values from get_users_table, e.g. "2,3,8"
 
             Returns:
                 None
@@ -1896,7 +1896,7 @@ class WebInterface(object):
             Required parameters:
                 user_id (str):          The id of the Plex user
                 or
-                row_ids (str):          Comma separated row ids to delete, e.g. "2,3,8"
+                row_ids (str):          Comma separated user row_id values from get_users_table, e.g. "2,3,8"
 
             Optional parameters:
                 None

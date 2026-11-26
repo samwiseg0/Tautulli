@@ -2,9 +2,13 @@ import json
 
 import pytest
 
+from plexpy import database
+from plexpy.api2 import API2
 from plexpy.datafactory import DataFactory
 from plexpy import webserve
 from plexpy.users import Users
+
+from tests.test_history_table import insert_history_row
 
 
 # Draw shape reduced from webserve.py's get_user_logins(): the dt_columns it
@@ -155,3 +159,46 @@ def test_users_table_hides_deleted_users_from_a_guest(deleted_bob, monkeypatch):
     monkeypatch.setattr("plexpy.session.get_session_user_id", lambda: "2")
 
     assert user_list_ids(include_deleted="1") == set()
+
+
+@pytest.fixture
+def alice_row_id(app_db, app_config):
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+    app_db.action("INSERT INTO users (user_id, username) VALUES (1, 'alice')")
+    insert_history_row(app_db, 1, 1, 1, "alice", 1000, 1600, 301, "First Movie", "movie")
+    return app_db.select_single("SELECT id FROM users WHERE user_id = 1")["id"]
+
+
+def delete_by_row_ids(app_db, app_config, cmd, row_ids):
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd=cmd, row_ids=row_ids)
+    plays = app_db.select_single("SELECT COUNT(*) AS n FROM session_history")["n"]
+    return json.loads(out)["response"]["result"], plays
+
+
+@pytest.mark.parametrize("cmd", ["delete_user", "delete_all_user_history"])
+def test_delete_with_row_ids_of_no_user_answers_an_error(alice_row_id, app_db, app_config, cmd):
+    assert delete_by_row_ids(app_db, app_config, cmd, "999999") == ("error", 1)
+
+
+@pytest.mark.parametrize("cmd", ["delete_user", "delete_all_user_history"])
+def test_delete_with_a_user_row_id_deletes_the_history(alice_row_id, app_db, app_config, cmd):
+    assert delete_by_row_ids(app_db, app_config, cmd, str(alice_row_id)) == ("success", 0)
+
+
+@pytest.mark.parametrize("cmd", ["delete_user", "delete_all_user_history"])
+def test_delete_with_a_failed_history_delete_answers_an_error(alice_row_id, app_db, app_config, monkeypatch, cmd):
+    monkeypatch.setattr(database, "delete_user_history", lambda **kwargs: False)
+
+    assert delete_by_row_ids(app_db, app_config, cmd, str(alice_row_id)) == ("error", 1)
+
+
+@pytest.mark.parametrize("cmd", ["delete_user", "delete_all_user_history"])
+def test_delete_with_one_failed_history_delete_of_two_answers_an_error(alice_row_id, app_db, app_config, monkeypatch, cmd):
+    app_db.action("INSERT INTO users (user_id, username) VALUES (2, 'bob')")
+    bob_row_id = app_db.select_single("SELECT id FROM users WHERE user_id = 2")["id"]
+    real_delete = database.delete_user_history
+    monkeypatch.setattr(database, "delete_user_history",
+                        lambda user_id=None: str(user_id) != "2" and real_delete(user_id=user_id))
+
+    assert delete_by_row_ids(app_db, app_config, cmd, "%s,%s" % (alice_row_id, bob_row_id)) == ("error", 0)

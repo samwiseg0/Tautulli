@@ -832,7 +832,7 @@ class Users(object):
             for user in result:
                 success.append(self.delete(user_id=user['user_id'],
                                            purge_only=purge_only))
-            return all(success)
+            return bool(success) and all(success)
 
         elif user_id is not None and str(user_id).isdigit():
             delete_success = database.delete_user_history(user_id=user_id)
