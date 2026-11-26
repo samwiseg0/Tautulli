@@ -6602,7 +6602,8 @@ class WebInterface(object):
 
             Optional parameters:
                 grouping (int):         0 or 1
-                time_range (int):       The time range to calculate statistics, 30
+                time_range (int):       The time range to calculate statistics, 30.
+                                        Ignored when before and after are both sent.
                 stats_type (str):       'plays' or 'duration'
                 stats_start (int)       The row number of the stat item to start at, 0
                 stats_count (int):      The number of stat items to return, 5
@@ -6613,7 +6614,9 @@ class WebInterface(object):
                 user_id (int):          The id of the Plex user
                 before (str):           Stats before and including the date, "YYYY-MM-DD"
                 after (str):            Stats after and including the date, "YYYY-MM-DD"
-                include_archived (int): 0 or 1, include archived users and libraries
+                include_archived (int): 0 or 1, include archived users and libraries.
+                                        With 0, user_id or section_id still matches its archived user or library.
+                                        most_concurrent ignores user_id and section_id.
 
             Returns:
                 json:
