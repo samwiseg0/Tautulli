@@ -56,6 +56,20 @@ def test_image_proxy_serves_the_fallback_image(api, monkeypatch):
     assert (fallback["width"], fallback["img_format"], fallback["refresh"], fallback["clip"]) == ("300", "jpg", "1", True)
 
 
+@pytest.mark.parametrize("return_hash", ["0", "false", "no"])
+def test_image_proxy_with_return_hash_off_serves_the_image(api, monkeypatch, return_hash):
+    monkeypatch.setattr(pmsconnect.PmsConnect, "get_image", lambda self, **kwargs: (b"image", "image/png"))
+
+    assert api(cmd="pms_image_proxy", img="/library/metadata/5/thumb", return_hash=return_hash) == (200, b"image")
+
+
+def test_image_proxy_with_return_hash_on_answers_the_hash(api):
+    status, out = api(cmd="pms_image_proxy", img="/library/metadata/5/thumb", return_hash="true")
+
+    assert status == 200
+    assert json.loads(out)["response"]["data"]["img_hash"]
+
+
 def test_get_server_id_returns_the_server_url(api, monkeypatch):
     servers = [{"ip": "1.2.3.4", "port": "32400", "clientIdentifier": "abc"}]
     requests = []
