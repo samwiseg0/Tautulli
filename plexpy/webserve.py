@@ -7307,9 +7307,9 @@ class WebInterface(object):
                 rating_key (str):               The rating key of the exported item
 
             Optional parameters:
-                order_column (str):             "added_at", "sort_title", "container", "bitrate", "video_codec",
-                                                "video_resolution", "video_framerate", "audio_codec", "audio_channels",
-                                                "file_size", "last_played", "play_count"
+                order_column (str):             "timestamp", "media_type_title", "rating_key", "title", "file_format",
+                                                "metadata_level", "media_info_level", "custom_fields", "file_size",
+                                                "complete"
                 order_dir (str):                "desc" or "asc"
                 start (int):                    Row to start from, 0
                 length (int):                   Number of items to return, 25
