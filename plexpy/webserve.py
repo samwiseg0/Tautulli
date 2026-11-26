@@ -1926,9 +1926,8 @@ class WebInterface(object):
 
             ```
             Required parameters:
-                user_id (str):          The id of the Plex user
-                username (str):         The username of the Plex user
-                or
+                user_id (str):          The id of the Plex user, OR
+                username (str):         The username of the Plex user, OR
                 row_ids (str):          Comma separated row ids to restore, e.g. "2,3,8"
 
             Optional parameters:
