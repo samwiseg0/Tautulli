@@ -1007,7 +1007,7 @@ class WebInterface(object):
 
             Optional parameters:
                 include_last_accessed (bool):   True to include the last_accessed value for the library.
-                include_archived (int):         0 or 1, include archived users and libraries
+                include_archived (int):         0 or 1, count plays of archived users in last_accessed
 
             Returns:
                 json:
