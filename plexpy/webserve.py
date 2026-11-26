@@ -1217,9 +1217,8 @@ class WebInterface(object):
 
             ```
             Required parameters:
-                section_id (str):       The id of the Plex library section
-                section_name (str):     The name of the Plex library section
-                or
+                section_id (str):       The id of the Plex library section, OR
+                section_name (str):     The name of the Plex library section, OR
                 row_ids (str):          Comma separated row ids to restore, e.g. "2,3,8"
 
             Optional parameters:
