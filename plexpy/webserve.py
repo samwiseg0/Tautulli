@@ -4198,6 +4198,9 @@ class WebInterface(object):
             return {'result': 'error', 'message': 'No config specified for import'}
 
         config.set_import_thread(config=config_path, backup=helpers.bool_true(backup))
+        thread = config.IMPORT_THREAD
+        if isinstance(self, API2) and thread and thread.ident is None:
+            thread.start()
 
         return {'result': 'success',
                 'message': 'Config import has started. Check the logs to monitor any problems. '
