@@ -2361,7 +2361,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2407,7 +2407,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2453,7 +2453,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2499,7 +2499,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of months of data to return
+                time_range (str):       The number of months of data to return, 12 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2545,7 +2545,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2591,7 +2591,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2637,7 +2637,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2682,7 +2682,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
 
@@ -2722,7 +2722,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2767,7 +2767,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2812,7 +2812,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
@@ -2857,7 +2857,7 @@ class WebInterface(object):
                 None
 
             Optional parameters:
-                time_range (str):       The number of days of data to return
+                time_range (str):       The number of days of data to return, 30 if 0, missing or not an integer
                 y_axis (str):           "plays" or "duration"
                 user_id (str):          Comma separated list of user id to filter the data
                 include_archived (int): 0 or 1, include archived users and libraries
