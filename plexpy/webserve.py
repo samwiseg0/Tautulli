@@ -4792,10 +4792,9 @@ class WebInterface(object):
             ```
             Required parameters:
                 rating_key (str):       Rating key of the item
-                media_type (str):       Media type of the item
 
             Optional parameters:
-                None
+                media_type (str):       Media type of the item, used only for "playlist", "collection" and "artist"
 
             Returns:
                 json:
