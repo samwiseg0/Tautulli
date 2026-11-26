@@ -12,10 +12,14 @@ test_guest_history.py. bob (user_id 2) owns rows 3 and 5. alice owns
 rows 1, 2, 4 and 6.
 """
 
+import json
+
 import pytest
 
 import plexpy.session
 from plexpy import datafactory
+from plexpy import webserve  # noqa: F401  (registers the handlers on API2)
+from plexpy.api2 import API2
 
 from tests.test_history_table import seed_history
 
@@ -47,3 +51,18 @@ def test_guest_gets_their_own_row(guest_bob):
 
 def test_guest_gets_nothing_for_another_users_row(guest_bob):
     assert stream_details(1) == {}
+
+
+@pytest.mark.parametrize("params, current", [
+    ({"row_id": "3", "session_key": "7"}, ""),
+    ({"session_key": "7"}, 1),
+])
+def test_history_row_is_not_a_current_session(app_db, app_config, params, current):
+    seed_history(app_db)
+    app_db.action("INSERT INTO sessions (session_key, user_id, title) VALUES (7, 1, 'Live Stream')")
+    app_config.API_ENABLED = 1
+    app_config.API_KEY = "a" * 32
+
+    out = API2()._api_run(apikey=app_config.API_KEY, cmd="get_stream_data", **params)
+
+    assert json.loads(out)["response"]["data"]["current_session"] == current

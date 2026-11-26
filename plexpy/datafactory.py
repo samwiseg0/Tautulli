@@ -1810,7 +1810,7 @@ class DataFactory(object):
                              'title': item['title'],
                              'grandparent_title': item['grandparent_title'],
                              'original_title': item['original_title'],
-                             'current_session': 1 if session_key else 0,
+                             'current_session': 1 if session_key and not row_id else 0,
                              'pre_tautulli': pre_tautulli
                              }
 
