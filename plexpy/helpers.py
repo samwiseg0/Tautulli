@@ -1018,6 +1018,11 @@ def build_datatables_json(kwargs, dt_columns, default_sort_col=None):
 
         order.append({"column": order_column, "dir": order_dir})
 
+    if not order:
+        order_dir = order_dirs[0].lower()
+        order.append({"column": column_names.index(default_sort_col),
+                      "dir": order_dir if order_dir in ("asc", "desc") else "desc"})
+
     # Build json data
     json_data = {"draw": 1,
                  "columns": columns,

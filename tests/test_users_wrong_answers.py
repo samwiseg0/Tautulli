@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from plexpy import users, webserve  # noqa: F401  (webserve registers the handlers on API2)
 from plexpy.api2 import API2
 
@@ -47,3 +49,41 @@ def test_get_user_refresh_keeps_include_archived(app_db, app_config, monkeypatch
     data = api_data(app_config, cmd="get_user", user_id="42", include_last_seen="1", include_archived="1")
 
     assert (data["user_id"], data["last_seen"]) == (42, 1000)
+
+
+def test_get_users_table_keeps_its_own_default_sort(app_db, app_config):
+    # The default sort column, friendly_name, is column 1.
+    for user_id, name in ((1, "alice"), (2, "carol"), (3, "bob")):
+        app_db.action("INSERT INTO users (user_id, username) VALUES (?, ?)", [user_id, name])
+
+    data = api_data(app_config, cmd="get_users_table", order_column="bogus")
+
+    assert [row["friendly_name"] for row in data["data"] if row["user_id"]] == ["carol", "bob", "alice"]
+
+
+@pytest.mark.parametrize("order_dir, timestamps", [
+    ("asc", [1000, 2000, 3000]),
+    ("ASC", [1000, 2000, 3000]),
+    ("asc,desc", [1000, 2000, 3000]),
+    ("", [3000, 2000, 1000]),
+    ("bad", [3000, 2000, 1000]),
+])
+def test_get_user_logins_default_sort_takes_the_order_dir(app_db, app_config, order_dir, timestamps):
+    for timestamp in (1000, 3000, 2000):
+        app_db.action("INSERT INTO user_login (timestamp, user_id, user, user_group, success) "
+                      "VALUES (?, 0, 'Local', 'guest', 1)", [timestamp])
+
+    data = api_data(app_config, cmd="get_user_logins", user_id="0", order_column="date", order_dir=order_dir)
+
+    assert [row["timestamp"] for row in data["data"]] == timestamps
+
+
+@pytest.mark.parametrize("order_column", ["date", "bogus,time"])
+def test_get_user_logins_keeps_the_default_sort_for_unknown_columns(app_db, app_config, order_column):
+    for timestamp in (1000, 3000, 2000):
+        app_db.action("INSERT INTO user_login (timestamp, user_id, user, user_group, success) "
+                      "VALUES (?, 0, 'Local', 'guest', 1)", [timestamp])
+
+    data = api_data(app_config, cmd="get_user_logins", user_id="0", order_column=order_column)
+
+    assert [row["timestamp"] for row in data["data"]] == [3000, 2000, 1000]

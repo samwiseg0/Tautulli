@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import sqlite3
 
 import pytest
@@ -429,4 +430,11 @@ def test_get_ip_returns_empty_when_resolution_fails(monkeypatch):
 
     monkeypatch.setattr(helpers.socket, "getaddrinfo", failed_lookup)
     assert helpers.get_ip("missing.example.test") == ""
+
+
+def test_build_datatables_json_sorts_a_known_column_alone():
+    columns = [("timestamp", True, False), ("ip_address", True, True)]
+    draw = helpers.build_datatables_json({"order_column": "ip_address"}, columns, "timestamp")
+
+    assert json.loads(draw)["order"] == [{"column": 1, "dir": "desc"}]
 
