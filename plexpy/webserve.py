@@ -5846,7 +5846,8 @@ class WebInterface(object):
                 start (str):        The item number to start at
                 media_type (str):   "movie", "show", "artist", "other_video",
                                     or a comma separated list, e.g. "movie,show"
-                section_id (str):   The id of the Plex library section
+                section_id (str):   The id of the Plex library section.
+                                    Send only one of media_type and section_id.
 
             Returns:
                 json:
