@@ -3098,6 +3098,8 @@ class WebInterface(object):
                 None
 
             Optional parameters:
+                notifier_id (str):              Comma separated notifier ids, e.g. "1,4"
+                notify_action (str):            Comma separated notify actions, e.g. "on_play,on_stop"
                 order_column (str):             "timestamp", "notifier_id", "agent_name", "notify_action",
                                                 "subject_text", "body_text",
                 order_dir (str):                "desc" or "asc"
@@ -3143,8 +3145,16 @@ class WebInterface(object):
                           ("body_text", True, True)]
             kwargs['json_data'] = build_datatables_json(kwargs, dt_columns, "timestamp")
 
+        custom_where = []
+        notifier_id = helpers.split_strip(kwargs.pop('notifier_id', ''))
+        if notifier_id:
+            custom_where.append(['notify_log.notifier_id IN', notifier_id])
+        notify_action = helpers.split_strip(kwargs.pop('notify_action', ''))
+        if notify_action:
+            custom_where.append(['notify_log.notify_action IN', notify_action])
+
         data_factory = datafactory.DataFactory()
-        notification_logs = data_factory.get_notification_log(kwargs=kwargs)
+        notification_logs = data_factory.get_notification_log(kwargs=kwargs, custom_where=custom_where)
 
         if notification_logs is None:
             cherrypy.response.status = 500
@@ -3165,6 +3175,8 @@ class WebInterface(object):
                 None
 
             Optional parameters:
+                newsletter_id (str):            Comma separated newsletter ids, e.g. "1,4"
+                notify_action (str):            Comma separated notify actions, e.g. "on_cron,api"
                 order_column (str):             "timestamp", "newsletter_id", "agent_name", "notify_action",
                                                 "subject_text", "start_date", "end_date", "uuid"
                 order_dir (str):                "desc" or "asc"
@@ -3212,8 +3224,16 @@ class WebInterface(object):
                           ("uuid", True, True)]
             kwargs['json_data'] = build_datatables_json(kwargs, dt_columns, "timestamp")
 
+        custom_where = []
+        newsletter_id = helpers.split_strip(kwargs.pop('newsletter_id', ''))
+        if newsletter_id:
+            custom_where.append(['newsletter_log.newsletter_id IN', newsletter_id])
+        notify_action = helpers.split_strip(kwargs.pop('notify_action', ''))
+        if notify_action:
+            custom_where.append(['newsletter_log.notify_action IN', notify_action])
+
         data_factory = datafactory.DataFactory()
-        newsletter_logs = data_factory.get_newsletter_log(kwargs=kwargs)
+        newsletter_logs = data_factory.get_newsletter_log(kwargs=kwargs, custom_where=custom_where)
 
         if newsletter_logs is None:
             cherrypy.response.status = 500

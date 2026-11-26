@@ -2570,7 +2570,7 @@ class DataFactory(object):
 
             monitor_db.action(query=query, args=args)
 
-    def get_notification_log(self, kwargs=None):
+    def get_notification_log(self, kwargs=None, custom_where=None):
         data_tables = datatables.DataTables()
 
         columns = ["notify_log.id",
@@ -2590,7 +2590,7 @@ class DataFactory(object):
         try:
             query = data_tables.ssp_query(table_name='notify_log',
                                           columns=columns,
-                                          custom_where=[],
+                                          custom_where=custom_where,
                                           group_by=[],
                                           join_types=[],
                                           join_tables=[],
@@ -2646,7 +2646,7 @@ class DataFactory(object):
             logger.exception("Tautulli DataFactory :: Unable to execute database query for delete_notification_log: %s." % e)
             return False
 
-    def get_newsletter_log(self, kwargs=None):
+    def get_newsletter_log(self, kwargs=None, custom_where=None):
         data_tables = datatables.DataTables()
 
         columns = ["newsletter_log.id",
@@ -2665,7 +2665,7 @@ class DataFactory(object):
         try:
             query = data_tables.ssp_query(table_name='newsletter_log',
                                           columns=columns,
-                                          custom_where=[],
+                                          custom_where=custom_where,
                                           group_by=[],
                                           join_types=[],
                                           join_tables=[],
