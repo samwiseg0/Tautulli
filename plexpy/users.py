@@ -495,7 +495,8 @@ class Users(object):
             refresh_users()
 
             user_details = self.get_user_details(user_id=user_id, user=user, email=email,
-                                                 include_last_seen=include_last_seen)
+                                                 include_last_seen=include_last_seen,
+                                                 include_archived=include_archived)
 
             if user_details:
                 return user_details
@@ -537,7 +538,8 @@ class Users(object):
                     "keep_history, deleted_user, is_archived, " \
                     "allow_guest, shared_libraries, %s AS last_seen " \
                     "FROM users %s " \
-                    "WHERE %s COLLATE NOCASE" % (last_seen, join, where)
+                    "WHERE %s COLLATE NOCASE " \
+                    "GROUP BY users.id" % (last_seen, join, where)
             result = monitor_db.select(query, args=args)
         except Exception as e:
             logger.exception("Tautulli Users :: Unable to execute database query for get_user_details: %s." % e)
