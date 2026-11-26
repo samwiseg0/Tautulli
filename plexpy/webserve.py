@@ -5614,7 +5614,7 @@ class WebInterface(object):
 
             ```
             Required parameters:
-                rating_key (str):       Rating key of the item, OR
+                rating_key (str):       Rating key of the item
 
             Optional parameters:
                 None
