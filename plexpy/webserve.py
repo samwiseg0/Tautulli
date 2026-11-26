@@ -792,11 +792,12 @@ class WebInterface(object):
 
             ```
             Required parameters:
-                section_id (str):               The id of the Plex library section, OR
-                rating_key (str):               The grandparent or parent rating key
+                section_id (str):               The id of the Plex library section
 
             Optional parameters:
-                section_type (str):             "movie", "show", "artist", "photo"
+                rating_key (str):               The grandparent or parent rating key
+                section_type (str):             "movie", "show", "artist", "photo", or with rating_key the type
+                                                of the children: "season", "episode", "album", "track", "picture"
                 order_column (str):             "added_at", "sort_title", "container", "bitrate", "video_codec",
                                                 "video_resolution", "video_framerate", "audio_codec", "audio_channels",
                                                 "file_size", "last_played", "play_count"
