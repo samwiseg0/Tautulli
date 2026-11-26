@@ -545,6 +545,8 @@ class API2(object):
             self._api_result_type = 'error'
             return
 
+        kwargs.pop('notify_action', None)
+
         logger.api_debug('Tautulli APIv2 :: Sending newsletter.')
         success = newsletter_handler.notify(newsletter_id=newsletter_id,
                                             notify_action='api',
