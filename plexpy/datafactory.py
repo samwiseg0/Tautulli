@@ -655,9 +655,9 @@ class DataFactory(object):
             before_timestamp = helpers.YMD_to_timestamp(before)
             where_timeframe_args.append(before_timestamp)
             if not after:
-                after = helpers.YMD_to_timestamp(before) - time_range * 24 * 60 * 60
+                range_start = helpers.YMD_to_timestamp(before) - time_range * 24 * 60 * 60
                 where_timeframe += "AND session_history.stopped >= ? "
-                where_timeframe_args.append(after)
+                where_timeframe_args.append(range_start)
         if after:
             where_timeframe += "AND session_history.started >= ? "
             after_timestamp = helpers.YMD_to_timestamp(after)
@@ -666,7 +666,7 @@ class DataFactory(object):
                 before = helpers.YMD_to_timestamp(after) + time_range * 24 * 60 * 60
                 where_timeframe += "AND session_history.stopped <= ? "
                 where_timeframe_args.append(before)
-        if not (before and after):
+        if not (before or after):
             timestamp = helpers.timestamp() - time_range * 24 * 60 * 60
             where_timeframe += "AND session_history.stopped >= ? "
             where_timeframe_args.append(timestamp)
